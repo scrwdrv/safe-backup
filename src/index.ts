@@ -1,6 +1,6 @@
 import * as folderEncrypt from 'folder-encrypt';
-import cliParmas from 'cli-params';
 import * as fs from 'fs';
+import args from './init';
 
 class Backup {
 
@@ -10,21 +10,6 @@ class Backup {
     } = {} as any;
 
     constructor() {
-        let args = cliParmas([{
-            param: 'input',
-            type: 'string',
-            optional: true,
-            alias: 'i'
-        }, {
-            param: 'watch',
-            type: 'int',
-            optional: true,
-            default: 60,
-            alias: 'w'
-        }], {
-            param: 'target',
-            type: 'string'
-        });
 
 
     }
