@@ -26,7 +26,23 @@ declare global {
         passwordHash: string;
     }
 }
+`
+Usage:
+    backup --input <inputPath> [--password <password>] [--save-password [true|false]] [--watch [interval]] <outputPath>
+    backup --input <inputPath1, inputPath2> <outputPath1, outputPath2>
+    backup --help
+    backup --version
+    backup --config
 
+Options:
+    -i --input          Absolute path(s) of folder/file to backup, separate by comma.
+    -p --password       Password for encryption (not recommended to use password in command line).
+    -s --save-password  Save password for encryption so you don't have to enter it every time.
+    -w --watch          Watch mode.
+    -h --help           Show this screen.
+    -v --version        Show version.
+    -c --config         Show current configuration.
+`
 class Prompt {
     private rl: readline.Interface;
     private getRl() {
