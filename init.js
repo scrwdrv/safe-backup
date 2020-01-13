@@ -6,8 +6,6 @@ const fs = require("fs");
 const crypto = require("crypto");
 const readline = require("readline");
 const physical_cores_1 = require("physical-cores");
-console.log(physical_cores_1.default);
-console.log(require('physical-cores'));
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -86,6 +84,8 @@ let config = null;
         log.info('No parameters were found, restoring last known good configuration...');
     }
     await handleConfig(config);
+    for (let i = physical_cores_1.default; i--;) {
+    }
 })();
 function handleConfig(c) {
     return new Promise((resolve, reject) => {

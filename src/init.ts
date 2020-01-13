@@ -4,9 +4,7 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import * as readline from 'readline';
 import physicalCores from 'physical-cores';
-
-console.log(physicalCores)
-console.log(require('physical-cores'));
+import * as cluster from 'cluster';
 
 type Config = {
     input: string[];
@@ -100,6 +98,10 @@ let config: Config = null;
     }
 
     await handleConfig(config);
+
+    for (let i = physicalCores; i--;) {
+
+    }
 
 })();
 
