@@ -26,10 +26,12 @@ declare global {
         passwordHash: string;
     }
 }
+
 `
 Usage:
     backup --input <inputPath> [--password <password>] [--save-password [true|false]] [--watch [interval]] <outputPath>
     backup --input <inputPath1, inputPath2> <outputPath1, outputPath2>
+    backup --decrypt <backupPath> [--password <password>]
     backup --help
     backup --version
     backup --config
@@ -39,29 +41,37 @@ Options:
     -p --password       Password for encryption (not recommended to use password in command line).
     -s --save-password  Save password for encryption so you don't have to enter it every time.
     -w --watch          Watch mode.
+    -d --decrypt        Absolute path of .backup file to decrypt.
     -h --help           Show this screen.
     -v --version        Show version.
     -c --config         Show current configuration.
 `
+
 class Prompt {
     private rl: readline.Interface;
+    private asking = false;
     private getRl() {
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout
+        }).on('SIGINT', () => {
+            if (this.asking) process.exit()
         });
     }
 
     ask(question: string) {
         return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
+            this.asking = true;
             this.rl.question(question, resolve);
         });
     }
 
     end() {
+        this.rl.removeAllListeners();
         this.rl.close();
         this.rl = null;
+        this.asking = false;
     }
 }
 
