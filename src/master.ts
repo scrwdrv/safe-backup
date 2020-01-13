@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import * as dir from 'recurdir';
 import * as fs from 'fs';
 
-type Config = {
+interface Config {
     input: string[];
     output: string[];
     watch: number;
@@ -37,18 +37,17 @@ class Prompt {
     }
 }
 
-const
+const cpc = new CPC(),
+    prompt = new Prompt(),
     logServer = new loggerServer({
         debug: false,
-        directory: './log',
+        directory: './logs',
         saveInterval: 60000
     }),
     log = new loggerClient({
         system: 'master',
         cluster: 0
-    }),
-    cpc = new CPC(),
-    prompt = new Prompt();
+    });
 
 let config: Config = null,
     workers: cpcClusterWorker[] = [];

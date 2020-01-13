@@ -9,6 +9,7 @@ const cluster = require("cluster");
 const crypto = require("crypto");
 const dir = require("recurdir");
 const fs = require("fs");
+;
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -28,14 +29,14 @@ class Prompt {
         this.rl = null;
     }
 }
-const logServer = new cluster_ipc_logger_1.loggerServer({
+const cpc = new worker_communication_1.default(), prompt = new Prompt(), logServer = new cluster_ipc_logger_1.loggerServer({
     debug: false,
-    directory: './log',
+    directory: './logs',
     saveInterval: 60000
 }), log = new cluster_ipc_logger_1.loggerClient({
     system: 'master',
     cluster: 0
-}), cpc = new worker_communication_1.default(), prompt = new Prompt();
+});
 let config = null, workers = [];
 (async function init() {
     try {
