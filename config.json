@@ -1,14 +1,9 @@
 {
     "input": [
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\index.js",
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\master.js",
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\node_modules",
-        "C:\\Users\\James\\Videos\\Movies\\The Two Popes (2019) [WEBRip] [1080p] [YTS.LT]"
+        "C:\\Users\\James\\Codes\\github\\safe-backup\\node_modules"
     ],
     "output": [
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\backup",
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\backup2"
+        "C:\\Users\\James\\Codes\\github\\safe-backup\\backup"
     ],
-    "watch": 60,
-    "passwordHash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3"
+    "watch": 3
 }

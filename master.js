@@ -36,8 +36,8 @@ const cpc = new worker_communication_1.default(), prompt = new Prompt(), logServ
 }), log = new cluster_ipc_logger_1.loggerClient({
     system: 'master',
     cluster: 0
-});
-let config = null, workers = [], running = [], modified = {}, paused = false;
+}), salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9';
+let config = {}, workers = [], running = [], modified = {}, paused = false, nosave = false;
 (async function init() {
     try {
         const args = cli_params_1.default([
@@ -56,25 +56,34 @@ let config = null, workers = [], running = [], modified = {}, paused = false;
                 type: 'string',
                 optional: true,
                 alias: 'p'
+            }, {
+                param: 'save-password',
+                type: 'boolean',
+                optional: true,
+                alias: 's'
             }
         ], {
             param: 'output',
             type: 'string'
         });
-        config = {
-            input: args.input.split(/\s*\|\s*/),
-            output: args.output.split(/\s*\|\s*/),
-            watch: args.watch,
-            passwordHash: null
-        };
+        config.input = removeBackslash(args.input.split(/\s*,\s*/));
+        config.output = removeBackslash(args.output.split(/\s*,\s*/));
+        config.watch = args.watch;
+        function removeBackslash(arr) {
+            for (let i = arr.length; i--;)
+                arr[i] = arr[i].replace(/\\,/g, ',');
+            return arr;
+        }
+        if (args['save-password'] === false)
+            nosave = true;
         if (args.password)
-            config.passwordHash = crypto.createHash('sha256').update(args.password).digest('hex');
+            config.passwordHash = hashPassword(args.password);
         else
             await (function setPassword() {
                 return new Promise(resolve => {
                     prompt.ask('Set your password for encryption: ').then(password => prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
                         if (confirm.toLowerCase() === 'y') {
-                            config.passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+                            config.passwordHash = hashPassword(password);
                             prompt.end();
                             resolve();
                         }
@@ -98,19 +107,18 @@ let config = null, workers = [], running = [], modified = {}, paused = false;
                     alias: 'p'
                 }
             ]);
-            let passwordHash;
             if (args.password)
-                passwordHash = crypto.createHash('sha256').update(args.password).digest('hex');
+                config.passwordHash = hashPassword(args.password);
             else
                 await new Promise(resolve => prompt.ask('Enter your password: ').then(password => {
-                    passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+                    config.passwordHash = hashPassword(password);
                     prompt.end();
                     resolve();
                 }));
             if (!PATH.isAbsolute(args.decrypt))
                 return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), exit();
             const t = Date.now();
-            return forkWorker('1').sendJob('decrypt', { input: args.decrypt, passwordHash: passwordHash }, (err) => {
+            return forkWorker('1').sendJob('decrypt', { input: args.decrypt, passwordHash: config.passwordHash }, (err) => {
                 if (err)
                     log.debug(err), log.error(`Error occurred while decrypting [${formatPath(args.decrypt)}]`);
                 else {
@@ -126,7 +134,7 @@ let config = null, workers = [], running = [], modified = {}, paused = false;
         }
     }
     try {
-        await handleConfig(config);
+        await handleConfig(Object.keys(config).length ? config : null);
         for (let typeOfPath of ['input', 'output'])
             for (let i = config[typeOfPath].length; i--;)
                 if (!PATH.isAbsolute(config[typeOfPath][i]))
@@ -256,8 +264,8 @@ async function exit(retry = 0) {
     if (l) {
         paused = null;
         if (config.watch)
-            log.warn(`${l} task${l ? 's' : ''} still running, hang on...`);
-        log.warn(`Ctrl+C again to force exit [NOT RECOMMENDED]`);
+            log.warn(`${l} task${l ? 's' : ''} still running, hang on...`),
+                log.warn(`Ctrl+C again to force exit [NOT RECOMMENDED]`);
         await new Promise((resolve) => {
             const interval = setInterval(() => {
                 if (!running.length)
@@ -270,24 +278,44 @@ async function exit(retry = 0) {
             .removeAllListeners()
             .kill();
     paused = null;
-    log.warn('Exiting...');
+    if (config.watch)
+        log.warn('Exiting...');
     if (retry > 10)
         return process.exit();
     setTimeout(() => logServer.save().then(process.exit).catch(() => exit(retry + 1)), 1000);
 }
 function handleConfig(c) {
     return new Promise((resolve, reject) => {
-        if (c)
+        if (c) {
+            if (nosave) {
+                c = { ...c };
+                delete c.passwordHash;
+            }
             fs.writeFile('./config.json', JSON.stringify(c, null, 4), (err) => {
                 if (err)
                     return reject(err);
                 resolve();
             });
+        }
         else
-            fs.readFile('./config.json', 'utf8', (err, data) => {
+            fs.readFile('./config.json', 'utf8', async (err, data) => {
                 if (err)
                     return reject(err);
                 config = JSON.parse(data);
+                if (!config.passwordHash)
+                    await (function setPassword() {
+                        return new Promise(resolve => {
+                            prompt.ask('Enter your password for encryption: ').then(password => prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
+                                if (confirm.toLowerCase() === 'y') {
+                                    config.passwordHash = hashPassword(password);
+                                    prompt.end();
+                                    resolve();
+                                }
+                                else
+                                    setPassword().then(resolve);
+                            }));
+                        });
+                    })();
                 resolve();
             });
     });
@@ -302,4 +330,7 @@ function formatPath(p, max = 30) {
         p = p.slice(0, Math.ceil(n)) + '...' + p.slice(-Math.floor(n));
     }
     return p;
+}
+function hashPassword(p) {
+    return crypto.createHash('sha256').update(p + salt).digest('hex');
 }
