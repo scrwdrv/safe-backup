@@ -1,12 +1,12 @@
-import cliParmas from 'cli-params';
 import { loggerServer, loggerClient } from 'cluster-ipc-logger';
-import * as fs from 'fs';
-import * as crypto from 'crypto';
-import * as readline from 'readline';
 import physicalCores from 'physical-cores';
-import * as cluster from 'cluster';
 import CPC from 'worker-communication';
+import cliParmas from 'cli-params';
+import * as readline from 'readline';
+import * as cluster from 'cluster';
+import * as crypto from 'crypto';
 import * as dir from 'recurdir';
+import * as fs from 'fs';
 
 type Config = {
     input: string[];
@@ -25,7 +25,7 @@ class Prompt {
     }
 
     ask(question: string) {
-        return new Promise<string>((resolve, reject) => {
+        return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
             this.rl.question(question, resolve);
         });

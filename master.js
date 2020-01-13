@@ -1,14 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const cli_params_1 = require("cli-params");
 const cluster_ipc_logger_1 = require("cluster-ipc-logger");
-const fs = require("fs");
-const crypto = require("crypto");
-const readline = require("readline");
 const physical_cores_1 = require("physical-cores");
-const cluster = require("cluster");
 const worker_communication_1 = require("worker-communication");
+const cli_params_1 = require("cli-params");
+const readline = require("readline");
+const cluster = require("cluster");
+const crypto = require("crypto");
 const dir = require("recurdir");
+const fs = require("fs");
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -17,7 +17,7 @@ class Prompt {
         });
     }
     ask(question) {
-        return new Promise((resolve, reject) => {
+        return new Promise(resolve => {
             if (!this.rl)
                 this.getRl();
             this.rl.question(question, resolve);
