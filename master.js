@@ -89,20 +89,21 @@ let config = null, workers = [];
     try {
         await handleConfig(config);
         await dir.mk(config.output);
-        for (let i = physical_cores_1.default || 1; i--;)
-            forkWorker((i + 1).toString());
-        for (let i = config.input.length; i--;)
-            fs.stat(config.input[i], (err, stats) => {
-                if (err)
-                    return log.error(err);
-                fs.watch(config.input[i], { recursive: !stats.isFile() }, (evt, file) => {
-                    console.log(evt, file);
-                }).on('error', log.error);
-            });
     }
     catch (err) {
-        return log.error(err);
+        log.debug(err);
+        log.error(`Failed to initialize, see the log file for details`);
+        return exit();
     }
+    for (let i = physical_cores_1.default < 1 ? 1 : physical_cores_1.default; i--;)
+        forkWorker((i + 1).toString());
+    for (let i = config.input.length; i--;)
+        fs.stat(config.input[i], (err, stats) => {
+            if (err)
+                return log.debug(err), log.error(`Error occurred while accessing input [${config.input[i]}]`);
+            watchPath(config.input[i], stats.isFile());
+        });
+    safetyGuard();
     function forkWorker(id) {
         const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
         worker.on('exit', () => {
@@ -115,7 +116,55 @@ let config = null, workers = [];
         });
         workers.push(worker);
     }
+    function watchPath(path, isFile, retry = 0) {
+        if (retry > 10)
+            return log.warn(`Stopped monitoring input [${path}]`);
+        const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
+        }).on('error', (err) => {
+            log.debug(err);
+            log.error(`Error occurred while monitoring input [${path}], retry in 10 secs...`);
+            watcher.removeAllListeners();
+            watcher.close();
+            clearTimeout(timeout);
+            setTimeout(watchPath, 10000, path, isFile, retry + 1);
+        }).on('close', () => {
+            clearTimeout(timeout);
+            setTimeout(watchPath, 10000, path, isFile, retry + 1);
+        }), timeout = setTimeout(() => {
+            retry = 0;
+        }, 60000);
+        function getWokrer() {
+            const worker = workers.shift();
+            workers.push(worker);
+            return worker;
+        }
+    }
 })();
+function safetyGuard() {
+    let exited = false, errorsCount = 0;
+    logServer.on('error', () => {
+        if (exited)
+            return;
+        errorsCount++;
+        if (errorsCount > 10) {
+            log.error(`Too many errors occurred, something might went wrong, exiting...`);
+            exited = true;
+            exit();
+        }
+    });
+    setInterval(() => {
+        errorsCount = 0;
+    }, 60000);
+}
+function exit(retry = 0) {
+    if (retry > 10)
+        return process.exit();
+    for (let i = workers.length; i--;)
+        workers.pop()
+            .removeAllListeners()
+            .kill();
+    logServer.save().then(process.exit).catch(() => exit(retry + 1));
+}
 function handleConfig(c) {
     return new Promise((resolve, reject) => {
         if (c)

@@ -107,21 +107,21 @@ let config: Config = null,
     try {
         await handleConfig(config);
         await dir.mk(config.output);
-
-        for (let i = physicalCores || 1; i--;)
-            forkWorker((i + 1).toString());
-
-        for (let i = config.input.length; i--;) fs.stat(config.input[i], (err, stats) => {
-            if (err) return log.error(err);
-
-            fs.watch(config.input[i], { recursive: !stats.isFile() }, (evt, file) => {
-                console.log(evt, file);
-            }).on('error', log.error);
-        });
-
     } catch (err) {
-        return log.error(err);
+        log.debug(err);
+        log.error(`Failed to initialize, see the log file for details`);
+        return exit();
     }
+
+    for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
+        forkWorker((i + 1).toString());
+
+    for (let i = config.input.length; i--;) fs.stat(config.input[i], (err, stats) => {
+        if (err) return log.debug(err), log.error(`Error occurred while accessing input [${config.input[i]}]`);
+        watchPath(config.input[i], stats.isFile());
+    });
+
+    safetyGuard();
 
     function forkWorker(id: string) {
         const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
@@ -135,7 +135,60 @@ let config: Config = null,
         workers.push(worker);
     }
 
+    function watchPath(path: string, isFile: boolean, retry = 0) {
+        if (retry > 10) return log.warn(`Stopped monitoring input [${path}]`);
+
+        const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
+
+        }).on('error', (err) => {
+            log.debug(err);
+            log.error(`Error occurred while monitoring input [${path}], retry in 10 secs...`);
+            watcher.removeAllListeners();
+            watcher.close();
+            clearTimeout(timeout);
+            setTimeout(watchPath, 10000, path, isFile, retry + 1);
+        }).on('close', () => {
+            clearTimeout(timeout);
+            setTimeout(watchPath, 10000, path, isFile, retry + 1);
+        }), timeout = setTimeout(() => {
+            retry = 0;
+        }, 60000);
+
+        function getWokrer() {
+            const worker = workers.shift();
+            workers.push(worker);
+            return worker;
+        }
+    }
 })();
+
+function safetyGuard() {
+    let exited = false,
+        errorsCount = 0;
+
+    logServer.on('error', () => {
+        if (exited) return;
+        errorsCount++;
+        if (errorsCount > 10) {
+            log.error(`Too many errors occurred, something might went wrong, exiting...`)
+            exited = true;
+            exit();
+        }
+    });
+
+    setInterval(() => {
+        errorsCount = 0;
+    }, 60000);
+}
+
+function exit(retry: number = 0) {
+    if (retry > 10) return process.exit();
+    for (let i = workers.length; i--;)
+        workers.pop()
+            .removeAllListeners()
+            .kill();
+    logServer.save().then(process.exit).catch(() => exit(retry + 1));
+}
 
 function handleConfig(c?: Config) {
     return new Promise<void>((resolve, reject) => {
@@ -146,7 +199,7 @@ function handleConfig(c?: Config) {
         else fs.readFile('./config.json', 'utf8', (err, data) => {
             if (err) return reject(err);
             config = JSON.parse(data);
-            resolve()
+            resolve();
         });
     })
 }
