@@ -6,6 +6,8 @@ const fs = require("fs");
 const crypto = require("crypto");
 const readline = require("readline");
 const physical_cores_1 = require("physical-cores");
+const cluster = require("cluster");
+const worker_communication_1 = require("worker-communication");
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -32,8 +34,8 @@ const logServer = new cluster_ipc_logger_1.loggerServer({
 }), log = new cluster_ipc_logger_1.loggerClient({
     system: 'master',
     cluster: 0
-}), prompt = new Prompt();
-let config = null;
+}), cpc = new worker_communication_1.default(), prompt = new Prompt();
+let config = null, workers = [];
 (async function init() {
     try {
         const args = cli_params_1.default([
@@ -84,7 +86,19 @@ let config = null;
         log.info('No parameters were found, restoring last known good configuration...');
     }
     await handleConfig(config);
-    for (let i = physical_cores_1.default; i--;) {
+    for (let i = physical_cores_1.default; i--;)
+        forkWorker((i + 1).toString());
+    function forkWorker(id) {
+        const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
+        worker.on('exit', () => {
+            worker.removeAllListeners();
+            const indexOfWorker = workers.indexOf(worker);
+            if (indexOfWorker > -1)
+                workers.splice(indexOfWorker, 1);
+            log.error(`Worker[${id}] died, forking new one...`);
+            forkWorker(id);
+        });
+        workers.push(worker);
     }
 })();
 function handleConfig(c) {

@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import * as readline from 'readline';
 import physicalCores from 'physical-cores';
 import * as cluster from 'cluster';
+import CPC from 'worker-communication';
 
 type Config = {
     input: string[];
@@ -35,16 +36,21 @@ class Prompt {
     }
 }
 
-const logServer = new loggerServer({
-    debug: false,
-    directory: './log',
-    saveInterval: 60000
-}), log = new loggerClient({
-    system: 'master',
-    cluster: 0
-}), prompt = new Prompt();
+const
+    logServer = new loggerServer({
+        debug: false,
+        directory: './log',
+        saveInterval: 60000
+    }),
+    log = new loggerClient({
+        system: 'master',
+        cluster: 0
+    }),
+    cpc = new CPC(),
+    prompt = new Prompt();
 
-let config: Config = null;
+let config: Config = null,
+    workers: cpcClusterWorker[] = [];
 
 (async function init() {
     try {
@@ -99,8 +105,19 @@ let config: Config = null;
 
     await handleConfig(config);
 
-    for (let i = physicalCores; i--;) {
+    for (let i = physicalCores; i--;)
+        forkWorker((i + 1).toString());
 
+    function forkWorker(id: string) {
+        const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
+        worker.on('exit', () => {
+            worker.removeAllListeners();
+            const indexOfWorker = workers.indexOf(worker);
+            if (indexOfWorker > -1) workers.splice(indexOfWorker, 1);
+            log.error(`Worker[${id}] died, forking new one...`);
+            forkWorker(id);
+        });
+        workers.push(worker);
     }
 
 })();

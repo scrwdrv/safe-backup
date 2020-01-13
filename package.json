@@ -33,7 +33,8 @@
     "cli-params": "^1.1.4",
     "cluster-ipc-logger": "^1.1.1",
     "folder-encrypt": "^1.0.3",
-    "physical-cores": "^1.0.2"
+    "physical-cores": "^1.0.2",
+    "worker-communication": "^1.0.3"
   },
   "devDependencies": {
     "@types/node": "^13.1.6"
