@@ -35,7 +35,7 @@
   "homepage": "https://github.com/scrwdrv/safe-backup#readme",
   "dependencies": {
     "cli-params": "^1.1.4",
-    "cluster-ipc-logger": "^1.1.2",
+    "cluster-ipc-logger": "^1.1.3",
     "folder-encrypt": "^1.0.6",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.5",
