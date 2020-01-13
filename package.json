@@ -34,6 +34,7 @@
     "cluster-ipc-logger": "^1.1.1",
     "folder-encrypt": "^1.0.3",
     "physical-cores": "^1.0.2",
+    "recurdir": "^1.0.5",
     "worker-communication": "^1.0.3"
   },
   "devDependencies": {

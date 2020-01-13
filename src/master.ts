@@ -6,6 +6,7 @@ import * as readline from 'readline';
 import physicalCores from 'physical-cores';
 import * as cluster from 'cluster';
 import CPC from 'worker-communication';
+import * as dir from 'recurdir';
 
 type Config = {
     input: string[];
@@ -103,10 +104,24 @@ let config: Config = null,
         log.info('No parameters were found, restoring last known good configuration...');
     }
 
-    await handleConfig(config);
+    try {
+        await handleConfig(config);
+        await dir.mk(config.output);
 
-    for (let i = physicalCores; i--;)
-        forkWorker((i + 1).toString());
+        for (let i = physicalCores || 1; i--;)
+            forkWorker((i + 1).toString());
+
+        for (let i = config.input.length; i--;) fs.stat(config.input[i], (err, stats) => {
+            if (err) return log.error(err);
+
+            fs.watch(config.input[i], { recursive: !stats.isFile() }, (evt, file) => {
+                console.log(evt, file);
+            }).on('error', log.error);
+        });
+
+    } catch (err) {
+        return log.error(err);
+    }
 
     function forkWorker(id: string) {
         const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));

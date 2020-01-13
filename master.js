@@ -8,6 +8,7 @@ const readline = require("readline");
 const physical_cores_1 = require("physical-cores");
 const cluster = require("cluster");
 const worker_communication_1 = require("worker-communication");
+const dir = require("recurdir");
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -85,9 +86,23 @@ let config = null, workers = [];
     catch (err) /* no args were found */ {
         log.info('No parameters were found, restoring last known good configuration...');
     }
-    await handleConfig(config);
-    for (let i = physical_cores_1.default; i--;)
-        forkWorker((i + 1).toString());
+    try {
+        await handleConfig(config);
+        await dir.mk(config.output);
+        for (let i = physical_cores_1.default || 1; i--;)
+            forkWorker((i + 1).toString());
+        for (let i = config.input.length; i--;)
+            fs.stat(config.input[i], (err, stats) => {
+                if (err)
+                    return log.error(err);
+                fs.watch(config.input[i], { recursive: !stats.isFile() }, (evt, file) => {
+                    console.log(evt, file);
+                }).on('error', log.error);
+            });
+    }
+    catch (err) {
+        return log.error(err);
+    }
     function forkWorker(id) {
         const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
         worker.on('exit', () => {
