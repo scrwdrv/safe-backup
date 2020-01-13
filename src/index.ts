@@ -1,6 +1,6 @@
 import * as folderEncrypt from 'folder-encrypt';
 import * as fs from 'fs';
-import args from './init';
+
 
 class Backup {
 
