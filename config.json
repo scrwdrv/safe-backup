@@ -1,9 +1,0 @@
-{
-    "input": [
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\node_modules"
-    ],
-    "output": [
-        "C:\\Users\\James\\Codes\\github\\safe-backup\\backup"
-    ],
-    "watch": 3
-}
