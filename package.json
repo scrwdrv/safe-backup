@@ -6,6 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "backup": "./index.js"
+  },
+  "preferGlobal": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/scrwdrv/safe-backup.git"
@@ -31,8 +35,8 @@
   "homepage": "https://github.com/scrwdrv/safe-backup#readme",
   "dependencies": {
     "cli-params": "^1.1.4",
-    "cluster-ipc-logger": "^1.1.1",
-    "folder-encrypt": "^1.0.3",
+    "cluster-ipc-logger": "^1.1.2",
+    "folder-encrypt": "^1.0.6",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.5",
     "worker-communication": "^1.0.3"

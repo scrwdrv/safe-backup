@@ -8,8 +8,8 @@ const readline = require("readline");
 const cluster = require("cluster");
 const crypto = require("crypto");
 const dir = require("recurdir");
+const PATH = require("path");
 const fs = require("fs");
-;
 class Prompt {
     getRl() {
         this.rl = readline.createInterface({
@@ -37,7 +37,7 @@ const cpc = new worker_communication_1.default(), prompt = new Prompt(), logServ
     system: 'master',
     cluster: 0
 });
-let config = null, workers = [];
+let config = null, workers = [], running = [], modified = {}, paused = false;
 (async function init() {
     try {
         const args = cli_params_1.default([
@@ -62,8 +62,8 @@ let config = null, workers = [];
             type: 'string'
         });
         config = {
-            input: args.input.split(','),
-            output: args.output.split(','),
+            input: args.input.split(/\s*\|\s*/),
+            output: args.output.split(/\s*\|\s*/),
             watch: args.watch,
             passwordHash: null
         };
@@ -71,7 +71,7 @@ let config = null, workers = [];
             config.passwordHash = crypto.createHash('sha256').update(args.password).digest('hex');
         else
             await (function setPassword() {
-                return new Promise((resolve) => {
+                return new Promise(resolve => {
                     prompt.ask('Set your password for encryption: ').then(password => prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
                         if (confirm.toLowerCase() === 'y') {
                             config.passwordHash = crypto.createHash('sha256').update(password).digest('hex');
@@ -84,11 +84,53 @@ let config = null, workers = [];
                 });
             })();
     }
-    catch (err) /* no args were found */ {
-        log.info('No parameters were found, restoring last known good configuration...');
+    catch (err) {
+        try {
+            const args = cli_params_1.default([
+                {
+                    param: 'decrypt',
+                    type: 'string',
+                    alias: 'd'
+                }, {
+                    param: 'password',
+                    type: 'string',
+                    optional: true,
+                    alias: 'p'
+                }
+            ]);
+            let passwordHash;
+            if (args.password)
+                passwordHash = crypto.createHash('sha256').update(args.password).digest('hex');
+            else
+                await new Promise(resolve => prompt.ask('Enter your password: ').then(password => {
+                    passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+                    prompt.end();
+                    resolve();
+                }));
+            if (!PATH.isAbsolute(args.decrypt))
+                return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), exit();
+            const t = Date.now();
+            return forkWorker('1').sendJob('decrypt', { input: args.decrypt, passwordHash: passwordHash }, (err) => {
+                if (err)
+                    log.debug(err), log.error(`Error occurred while decrypting [${formatPath(args.decrypt)}]`);
+                else {
+                    const decrypt = PATH.parse(args.decrypt);
+                    log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(args.decrypt)}]`);
+                    log.info(`Your decrypted file/folder can be found at ${PATH.join(decrypt.dir, decrypt.name)}`);
+                }
+                exit();
+            });
+        }
+        catch (err) {
+            log.info('No parameters were found, restoring configurations...');
+        }
     }
     try {
         await handleConfig(config);
+        for (let typeOfPath of ['input', 'output'])
+            for (let i = config[typeOfPath].length; i--;)
+                if (!PATH.isAbsolute(config[typeOfPath][i]))
+                    return log.error(`Path must be absolute [${formatPath(config[typeOfPath][i])}]`), exit();
         await dir.mk(config.output);
     }
     catch (err) {
@@ -99,46 +141,95 @@ let config = null, workers = [];
     for (let i = physical_cores_1.default < 1 ? 1 : physical_cores_1.default; i--;)
         forkWorker((i + 1).toString());
     for (let i = config.input.length; i--;)
-        fs.stat(config.input[i], (err, stats) => {
-            if (err)
-                return log.debug(err), log.error(`Error occurred while accessing input [${config.input[i]}]`);
-            watchPath(config.input[i], stats.isFile());
+        backup({ input: config.input[i], output: config.output, passwordHash: config.passwordHash }).then(() => {
+            if (config.watch)
+                return fs.stat(config.input[i], (err, stats) => {
+                    if (err)
+                        return log.debug(err), log.error(`Error occurred while accessing [${formatPath(config.input[i])}]`);
+                    watchMod(config.input[i], stats.isFile());
+                });
         });
-    safetyGuard();
-    function forkWorker(id) {
-        const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
-        worker.on('exit', () => {
-            worker.removeAllListeners();
-            const indexOfWorker = workers.indexOf(worker);
-            if (indexOfWorker > -1)
-                workers.splice(indexOfWorker, 1);
-            log.error(`Worker[${id}] died, forking new one...`);
-            forkWorker(id);
-        });
-        workers.push(worker);
+    if (config.watch) {
+        safetyGuard();
+        backupDaemon();
     }
-    function watchPath(path, isFile, retry = 0) {
-        if (retry > 10)
-            return log.warn(`Stopped monitoring input [${path}]`);
-        const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
-        }).on('error', (err) => {
-            log.debug(err);
-            log.error(`Error occurred while monitoring input [${path}], retry in 10 secs...`);
-            watcher.removeAllListeners();
-            watcher.close();
-            clearTimeout(timeout);
-            setTimeout(watchPath, 10000, path, isFile, retry + 1);
-        }).on('close', () => {
-            clearTimeout(timeout);
-            setTimeout(watchPath, 10000, path, isFile, retry + 1);
-        }), timeout = setTimeout(() => {
-            retry = 0;
-        }, 60000);
+    else
+        exit();
+    process.on('SIGINT', () => exit());
+    function backupDaemon() {
+        setTimeout(() => {
+            if (paused)
+                return;
+            let promises = [];
+            for (let input in modified) {
+                promises.push(backup({
+                    input: input,
+                    output: config.output,
+                    passwordHash: config.passwordHash
+                }, modified[input]));
+                delete modified[input];
+            }
+            Promise.all(promises).then(backupDaemon);
+        }, config.watch * 1000);
+    }
+    function backup(options, mod) {
+        return new Promise((resolve) => {
+            const worker = getWokrer(), t = Date.now();
+            running.push(worker.id);
+            worker.sendJob('backup', options, (err) => {
+                if (err)
+                    log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`);
+                else if (mod)
+                    log.info(`Synced ${mod} mod${mod > 1 ? 's' : ''}, duration: ${formatSec(Date.now() - t)}s [${formatPath(options.input)}]`);
+                else
+                    log.info(`Synced, duration: ${formatSec(Date.now() - t)}s [${formatPath(options.input)}]`);
+                const index = running.indexOf(worker.id);
+                if (index > -1)
+                    running.splice(index, 1);
+                resolve();
+            });
+        });
         function getWokrer() {
             const worker = workers.shift();
             workers.push(worker);
             return worker;
         }
+    }
+    function forkWorker(id) {
+        log.info(`Forking worker[${id}]`);
+        const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
+        worker.on('exit', () => {
+            worker.removeAllListeners();
+            const index = workers.indexOf(worker);
+            if (index > -1)
+                workers.splice(index, 1);
+            log.error(`Worker[${id}] died, forking new one...`);
+            forkWorker(id);
+        });
+        workers.push(worker);
+        return worker;
+    }
+    function watchMod(path, isFile, retry = 0) {
+        if (retry > 5) {
+            log.warn(`Stopped monitoring [${formatPath(path)}], next check in 10 mins...`);
+            return setTimeout(watchMod, 600000, path, isFile, 0);
+        }
+        const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
+            modified[path] ? modified[path]++ : modified[path] = 1;
+            log.info(`File modified [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
+        }).on('error', (err) => {
+            log.debug(err);
+            log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
+            watcher.removeAllListeners();
+            watcher.close();
+            clearTimeout(timeout);
+            setTimeout(watchMod, 10000, path, isFile, retry + 1);
+        }).on('close', () => {
+            clearTimeout(timeout);
+            setTimeout(watchMod, 10000, path, isFile, retry + 1);
+        }), timeout = setTimeout(() => {
+            retry = 0;
+        }, 60000);
     }
 })();
 function safetyGuard() {
@@ -147,7 +238,7 @@ function safetyGuard() {
         if (exited)
             return;
         errorsCount++;
-        if (errorsCount > 10) {
+        if (errorsCount > config.input.length * 10) {
             log.error(`Too many errors occurred, something might went wrong, exiting...`);
             exited = true;
             exit();
@@ -157,14 +248,32 @@ function safetyGuard() {
         errorsCount = 0;
     }, 60000);
 }
-function exit(retry = 0) {
-    if (retry > 10)
+async function exit(retry = 0) {
+    if (paused === null)
         return process.exit();
+    paused = true;
+    const l = running.length;
+    if (l) {
+        paused = null;
+        if (config.watch)
+            log.warn(`${l} task${l ? 's' : ''} still running, hang on...`);
+        log.warn(`Ctrl+C again to force exit [NOT RECOMMENDED]`);
+        await new Promise((resolve) => {
+            const interval = setInterval(() => {
+                if (!running.length)
+                    clearInterval(interval), resolve();
+            }, 500);
+        });
+    }
     for (let i = workers.length; i--;)
         workers.pop()
             .removeAllListeners()
             .kill();
-    logServer.save().then(process.exit).catch(() => exit(retry + 1));
+    paused = null;
+    log.warn('Exiting...');
+    if (retry > 10)
+        return process.exit();
+    setTimeout(() => logServer.save().then(process.exit).catch(() => exit(retry + 1)), 1000);
 }
 function handleConfig(c) {
     return new Promise((resolve, reject) => {
@@ -182,4 +291,15 @@ function handleConfig(c) {
                 resolve();
             });
     });
+}
+function formatSec(ms) {
+    return (ms / 1000).toFixed(2);
+}
+function formatPath(p, max = 30) {
+    const l = p.length;
+    if (l > max) {
+        const n = (max - 3) / 2;
+        p = p.slice(0, Math.ceil(n)) + '...' + p.slice(-Math.floor(n));
+    }
+    return p;
 }
