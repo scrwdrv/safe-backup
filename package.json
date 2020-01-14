@@ -1,13 +1,13 @@
 {
   "name": "safe-backup",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "A CLI tool that helps you backup file or folder into a single password encrypted file. Using technology of Tar & AES.",
   "main": "init.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "backup": "./index.js"
+    "safe-backup": "./index.js"
   },
   "preferGlobal": true,
   "repository": {
@@ -34,9 +34,9 @@
   },
   "homepage": "https://github.com/scrwdrv/safe-backup#readme",
   "dependencies": {
-    "cli-params": "^1.1.4",
+    "cli-params": "^1.2.1",
     "cluster-ipc-logger": "^1.1.3",
-    "folder-encrypt": "^1.0.7",
+    "folder-encrypt": "^1.0.8",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.5",
     "worker-communication": "^1.0.3"

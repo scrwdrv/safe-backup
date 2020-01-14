@@ -40,16 +40,15 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
             }
         }).on('finish', () => {
             for (let i = l; i--;) outputs[i].end();
-        });
+        })
 
-    } else writeStream = fs.createWriteStream(PATH.join(req.output[0], name))
-
+    } else writeStream = fs.createWriteStream(PATH.join(req.output[0], name));
+    
     folderEncrypt.encrypt({
         input: req.input,
         password: req.passwordHash,
         output: writeStream
     }).then(res).catch(res);
-
 });
 
 function formatPath(p: string, max: number = 30) {

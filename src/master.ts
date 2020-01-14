@@ -1,7 +1,7 @@
 import { loggerServer, loggerClient } from 'cluster-ipc-logger';
 import physicalCores from 'physical-cores';
 import CPC from 'worker-communication';
-import cliParmas from 'cli-params';
+import CLIParams from 'cli-params';
 import * as readline from 'readline';
 import * as cluster from 'cluster';
 import * as crypto from 'crypto';
@@ -26,26 +26,6 @@ declare global {
         passwordHash: string;
     }
 }
-
-`
-Usage:
-    backup --input <inputPath> [--password <password>] [--save-password [true|false]] [--watch [interval]] <outputPath>
-    backup --input <inputPath1, inputPath2> <outputPath1, outputPath2>
-    backup --decrypt <backupPath> [--password <password>]
-    backup --help
-    backup --version
-    backup --config
-
-Options:
-    -i --input          Absolute path(s) of folder/file to backup, separate by comma.
-    -p --password       Password for encryption (not recommended to use password in command line).
-    -s --save-password  Save password for encryption so you don't have to enter it every time.
-    -w --watch          Watch mode.
-    -d --decrypt        Absolute path of .backup file to decrypt.
-    -h --help           Show this screen.
-    -v --version        Show version.
-    -c --config         Show current configuration.
-`
 
 class Prompt {
     private rl: readline.Interface;
@@ -79,14 +59,33 @@ const cpc = new CPC(),
     prompt = new Prompt(),
     logServer = new loggerServer({
         debug: false,
-        directory: './logs',
+        directory: PATH.join(__dirname, 'logs'),
         saveInterval: 60000
     }),
     log = new loggerClient({
         system: 'master',
         cluster: 0
     }),
-    salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9';
+    salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9',
+    helpText = `
+Usage:
+    safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] --output <outputPath1> [outputPath2 [outputPath3 ...]] [--password <password>] [--save-password [true|false]] [--watch [interval]] 
+    safe-backup --decrypt <backupPath> [--password <password>]
+    safe-backup --help
+    safe-backup --version
+    safe-backup --config
+
+Options:
+    -i --input          Absolute path(s) of folder/file to backup, separate by space.
+    -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
+    -p --password       Password for encryption/decryption (not recommended to use password in command line).
+    -s --save-password  Save password for encryption so you don't have to enter it every time.
+    -w --watch          Watch mode.
+    -d --decrypt        Absolute path of .backup file to decrypt.
+    -h --help           Show this screen.
+    -v --version        Show version.
+    -c --config         Show current configuration.
+    `;
 
 let config: Config = {} as any,
     workers: cpcClusterWorker[] = [],
@@ -95,105 +94,153 @@ let config: Config = {} as any,
     paused = false,
     nosave = false;
 
+process.on('SIGINT', () => exit());
+
 (async function init() {
-    try {
-        const args = cliParmas([
-            {
-                param: 'input',
-                type: 'string',
-                alias: 'i'
-            }, {
-                param: 'watch',
-                type: 'int',
-                optional: true,
-                default: 60,
-                alias: 'w'
-            }, {
-                param: 'password',
-                type: 'string',
-                optional: true,
-                alias: 'p'
-            }, {
-                param: 'save-password',
-                type: 'boolean',
-                optional: true,
-                alias: 's'
-            }
-        ], {
-            param: 'output',
-            type: 'string'
-        });
+    await new Promise(resolve =>
+        new CLIParams()
+            .add({
+                params: [
+                    {
+                        param: 'input',
+                        type: 'array-of-string',
+                        alias: 'i'
+                    }, {
+                        param: 'watch',
+                        type: 'int',
+                        optional: true,
+                        default: 60,
+                        alias: 'w'
+                    }, {
+                        param: 'password',
+                        type: 'string',
+                        optional: true,
+                        alias: 'p'
+                    }, {
+                        param: 'save-password',
+                        type: 'boolean',
+                        optional: true,
+                        alias: 's'
+                    },
+                    {
+                        param: 'output',
+                        type: 'array-of-string',
+                        alias: 'o'
+                    }
+                ],
+                id: 'regular'
+            })
+            .add({
+                params: [
+                    {
+                        param: 'decrypt',
+                        type: 'string',
+                        alias: 'd'
+                    }, {
+                        param: 'password',
+                        type: 'string',
+                        optional: true,
+                        alias: 'p'
+                    }
+                ],
+                id: 'decrypt'
+            })
+            .add({
+                params: {
+                    param: 'help',
+                    type: 'boolean',
+                    alias: 'h'
+                },
+                id: 'help'
+            })
+            .add({
+                params: {
+                    param: 'version',
+                    type: 'boolean',
+                    alias: 'v'
+                },
+                id: 'version'
+            })
+            .add({
+                params: {
+                    param: 'config',
+                    type: 'boolean',
+                    alias: 'c'
+                },
+                id: 'config'
+            })
+            .exec(async (err, args, id) => {
+                if (err)
+                    if (process.argv.length === 2) log.info('No parameters were found, restoring configurations...')
+                    else return log.error(err), exit();
+                else switch (id) {
+                    case 'regular':
 
-        config.input = removeBackslash(args.input.split(/\s*,\s*/));
-        config.output = removeBackslash(args.output.split(/\s*,\s*/));
-        config.watch = args.watch;
+                        config.input = args.input;
+                        config.output = args.output;
+                        config.watch = args.watch;
 
-        function removeBackslash(arr: string[]) {
-            for (let i = arr.length; i--;)
-                arr[i] = arr[i].replace(/\\,/g, ',');
-            return arr;
-        }
+                        if (args['save-password'] === false) nosave = true;
 
-        if (args['save-password'] === false) nosave = true;
+                        if (args.password)
+                            config.passwordHash = hashPassword(args.password);
+                        else await (function setPassword() {
+                            return new Promise(resolve => {
+                                prompt.ask('Set your password for encryption: ').then(password =>
+                                    prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
+                                        if (confirm.toLowerCase() === 'y') {
+                                            config.passwordHash = hashPassword(password);
+                                            prompt.end();
+                                            resolve();
+                                        }
+                                        else setPassword().then(resolve);
+                                    })
+                                );
+                            });
+                        })();
+                        break;
+                    case 'decrypt':
+                        if (args.password)
+                            config.passwordHash = hashPassword(args.password);
+                        else await new Promise(resolve =>
+                            prompt.ask('Enter your password: ').then(password => {
+                                config.passwordHash = hashPassword(password);
+                                prompt.end();
+                                resolve();
+                            })
+                        )
 
-        if (args.password)
-            config.passwordHash = hashPassword(args.password);
-        else await (function setPassword() {
-            return new Promise(resolve => {
-                prompt.ask('Set your password for encryption: ').then(password =>
-                    prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
-                        if (confirm.toLowerCase() === 'y') {
-                            config.passwordHash = hashPassword(password);
-                            prompt.end();
-                            resolve();
-                        }
-                        else setPassword().then(resolve);
-                    })
-                );
-            });
-        })();
-    } catch (err) {
-        try {
-            const args = cliParmas([
-                {
-                    param: 'decrypt',
-                    type: 'string',
-                    alias: 'd'
-                }, {
-                    param: 'password',
-                    type: 'string',
-                    optional: true,
-                    alias: 'p'
+                        if (!PATH.isAbsolute(args.decrypt)) return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), exit();
+
+                        const t = Date.now();
+                        return forkWorker('1').sendJob('decrypt', { input: args.decrypt, passwordHash: config.passwordHash }, (err) => {
+                            if (err) log.debug(err), log.error(`Error occurred while decrypting [${formatPath(args.decrypt)}]`);
+                            else {
+                                const decrypt = PATH.parse(args.decrypt);
+                                log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(args.decrypt)}]`);
+                                log.info(`Your decrypted file/folder can be found at ${PATH.join(decrypt.dir, decrypt.name)}`);
+                            }
+                            exit();
+                        });
+                    case 'help':
+                        console.log(helpText);
+                        return exit();
+                    case 'version':
+                        console.log(`safe-backup version ${JSON.parse(fs.readFileSync(PATH.join(__dirname, 'package.json'), 'utf8')).version}`);
+                        return exit();
+                    case 'config':
+                        return handleConfig().then(() => {
+                            console.log(prettyJSON(config));
+                            config = {} as any;
+                            exit();
+                        }).catch(err => {
+                            console.log(err);
+                            exit();
+                        });
                 }
-            ]);
-
-            if (args.password)
-                config.passwordHash = hashPassword(args.password);
-            else await new Promise(resolve =>
-                prompt.ask('Enter your password: ').then(password => {
-                    config.passwordHash = hashPassword(password);
-                    prompt.end();
-                    resolve();
-                })
-            )
-
-            if (!PATH.isAbsolute(args.decrypt)) return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), exit();
-
-            const t = Date.now();
-            return forkWorker('1').sendJob('decrypt', { input: args.decrypt, passwordHash: config.passwordHash }, (err) => {
-                if (err) log.debug(err), log.error(`Error occurred while decrypting [${formatPath(args.decrypt)}]`);
-                else {
-                    const decrypt = PATH.parse(args.decrypt);
-                    log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(args.decrypt)}]`);
-                    log.info(`Your decrypted file/folder can be found at ${PATH.join(decrypt.dir, decrypt.name)}`);
-                }
-                exit();
-            });
-
-        } catch (err) {
-            log.info('No parameters were found, restoring configurations...');
-        }
-    }
+                resolve();
+            })
+    );
 
     try {
         await handleConfig(Object.keys(config).length ? config : null);
@@ -225,8 +272,6 @@ let config: Config = {} as any,
         safetyGuard();
         backupDaemon();
     } else exit();
-
-    process.on('SIGINT', () => exit());
 
     function backupDaemon() {
         setTimeout(() => {
@@ -350,7 +395,7 @@ async function exit(retry: number = 0) {
     paused = null;
     if (config.watch) log.warn('Exiting...');
     if (retry > 10) return process.exit();
-    setTimeout(() => logServer.save().then(process.exit).catch(() => exit(retry + 1)), 1000);
+    setTimeout(() => logServer.save().then(process.exit).catch(() => exit(retry + 1)), 500);
 }
 
 function handleConfig(c?: Config) {
@@ -360,14 +405,14 @@ function handleConfig(c?: Config) {
                 c = { ...c };
                 delete c.passwordHash;
             }
-            fs.writeFile('./config.json', JSON.stringify(c, null, 4), (err) => {
+            fs.writeFile(PATH.join(__dirname, 'config.json'), JSON.stringify(c, null, 4), (err) => {
                 if (err) return reject(err);
                 resolve();
             });
-        }
-        else fs.readFile('./config.json', 'utf8', async (err, data) => {
+        } else fs.readFile(PATH.join(__dirname, 'config.json'), 'utf8', async (err, data) => {
             if (err) return reject(err);
             config = JSON.parse(data);
+            if (c === undefined) return resolve();
             if (!config.passwordHash) await (function setPassword() {
                 return new Promise(resolve => {
                     prompt.ask('Enter your password for encryption: ').then(password =>
@@ -402,4 +447,21 @@ function formatPath(p: string, max: number = 30) {
 
 function hashPassword(p: string) {
     return crypto.createHash('sha256').update(p + salt).digest('hex');
+}
+
+function prettyJSON(obj: { [key: string]: any }) {
+    const json = JSON.stringify(obj, null, 4);
+    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        (match) => {
+            let cls = '\x1b[35m\x1b[1m';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = '\x1b[36m\x1b[1m';
+                } else {
+                    cls = '\x1b[37m\x1b[1m';
+                }
+            }
+            return cls + match + '\x1b[0m';
+        }
+    );
 }
