@@ -234,7 +234,8 @@ process.on('SIGINT', () => exit());
                             config = {} as any;
                             exit();
                         }).catch(err => {
-                            console.log(err);
+                            log.debug(err);
+                            console.log(`No configuration file is found`);
                             exit();
                         });
                 }
