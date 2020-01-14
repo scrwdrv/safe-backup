@@ -1,13 +1,12 @@
-const { compile } = require('nexe'),
+const nexe = require('nexe'),
     fs = require('fs'),
     version = JSON.parse(fs.readFileSync('./package.json', 'utf8')).version;
 
-compile({
+nexe.compile({
     input: './index.js',
-    target: 'win32-x86-10.13.0',
     name: 'safe-backup',
     build: true,
-    ico: './icon.ico',
+    ico: './assets/icon.ico',
     rc: {
         CompanyName: 'scrwdrv.tech',
         ProductName: 'Safe Backup',
@@ -16,8 +15,6 @@ compile({
         FileVersion: version,
         OriginalFilename: 'safe-backup.exe',
         InternalName: 'safe-backup',
-        LegalCopyright: 'Copyright scrwdrv contributors. MIT license.'
+        LegalCopyright: 'Copyright scrwdrv and contributors. MIT license.'
     }
-}).then(() => {
-    console.log('success');
 });

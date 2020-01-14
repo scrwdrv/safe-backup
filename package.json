@@ -1,11 +1,11 @@
 {
   "name": "safe-backup",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A CLI tool that helps you backup file or folder into a single password encrypted file. Using technology of Tar & AES.",
   "main": "init.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build" : "node ./build.js"
+    "build": "node ./build.js"
   },
   "bin": {
     "safe-backup": "./index.js"

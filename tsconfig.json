@@ -7,7 +7,7 @@
         "lib": [
             "esnext"
         ],
-        "outDir": "./"
+        "outDir": "./lib"
     },
     "include": [
         "./src"
