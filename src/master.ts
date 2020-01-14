@@ -295,10 +295,11 @@ process.on('SIGINT', () => exit());
                 t = Date.now();
 
             running.push(worker.id);
-            worker.sendJob('backup', options, (err) => {
+            worker.sendJob('backup', options, (err, bytes) => {
                 if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`);
-                else if (mod) log.info(`Synced ${mod} mod${mod > 1 ? 's' : ''}, duration: ${formatSec(Date.now() - t)}s [${formatPath(options.input)}]`);
-                else log.info(`Synced, duration: ${formatSec(Date.now() - t)}s [${formatPath(options.input)}]`)
+                else if (mod) log.info(`Synced ${mod} mod${mod > 1 ? 's' : ''}, duration: ${formatSec(Date.now() - t)}s [${formatBytes(bytes)}][${formatPath(options.input)}]`);
+                else log.info(`Synced, duration: ${formatSec(Date.now() - t)}s [${formatBytes(bytes)}][${formatPath(options.input)}]`)
+
                 const index = running.indexOf(worker.id);
                 if (index > -1) running.splice(index, 1);
                 resolve();
@@ -464,4 +465,10 @@ function prettyJSON(obj: { [key: string]: any }) {
             return cls + match + '\x1b[0m';
         }
     );
+}
+
+function formatBytes(bytes: number) {
+    const chars = 'KMGTP',
+        e = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, e)).toFixed(2) + ' ' + chars.charAt(e - 1) + 'B';
 }

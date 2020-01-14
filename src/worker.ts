@@ -25,30 +25,30 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
     const l = req.output.length,
         name = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup';
 
-    let writeStream: Writable;
+    let writeStream: Writable,
+        outputs: fs.WriteStream[] = [],
+        bytes = 0;
 
-    if (l > 1) {
-        let outputs: fs.WriteStream[] = [];
+    for (let i = l; i--;)
+        outputs.push(fs.createWriteStream(PATH.join(req.output[i], name)));
 
-        for (let i = l; i--;)
-            outputs.push(fs.createWriteStream(PATH.join(req.output[i], name)));
+    writeStream = new Writable({
+        write(chunk, encoding, next) {
+            bytes += chunk.length;
+            for (let i = l; i--;) outputs[i].write(chunk);
+            next();
+        }
+    }).on('finish', () => {
+        for (let i = l; i--;) outputs[i].end();
+    });
 
-        writeStream = new Writable({
-            write(chunk, encoding, next) {
-                for (let i = l; i--;) outputs[i].write(chunk);
-                next();
-            }
-        }).on('finish', () => {
-            for (let i = l; i--;) outputs[i].end();
-        })
 
-    } else writeStream = fs.createWriteStream(PATH.join(req.output[0], name));
-    
+
     folderEncrypt.encrypt({
         input: req.input,
         password: req.passwordHash,
         output: writeStream
-    }).then(res).catch(res);
+    }).then(() => res(null, bytes)).catch(res);
 });
 
 function formatPath(p: string, max: number = 30) {
