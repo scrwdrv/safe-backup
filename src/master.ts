@@ -33,7 +33,8 @@ class Prompt {
     private getRl() {
         this.rl = readline.createInterface({
             input: process.stdin,
-            output: process.stdout
+            output: process.stdout,
+            terminal: false
         }).on('SIGINT', () => {
             if (this.asking) process.exit()
         });
@@ -74,6 +75,7 @@ Usage:
     safe-backup --help
     safe-backup --version
     safe-backup --config
+    safe-backup --build-config
 
 Options:
     -i --input          Absolute path(s) of folder/file to backup, separate by space.
@@ -85,6 +87,7 @@ Options:
     -h --help           Show this screen.
     -v --version        Show version.
     -c --config         Show current configuration.
+    -b --build-config   Start building configurations.
     `;
 
 let config: Config = {} as any,
@@ -169,6 +172,14 @@ process.on('SIGINT', () => exit());
                 },
                 id: 'config'
             })
+            .add({
+                params: {
+                    param: 'build-config',
+                    type: 'boolean',
+                    alias: 'b'
+                },
+                id: 'build-config'
+            })
             .exec(async (err, args, id) => {
                 if (err)
                     if (process.argv.length === 2) log.info('No parameters were found, restoring configurations...')
@@ -238,6 +249,8 @@ process.on('SIGINT', () => exit());
                             console.log(`No configuration file is found`);
                             exit();
                         });
+                    case 'build-config':
+                        return askQuestions().then(resolve).catch(exit);
                 }
                 resolve();
             })
@@ -397,7 +410,8 @@ async function exit(retry: number = 0) {
     paused = null;
     if (config.watch) log.warn('Exiting...');
     if (retry > 10) return process.exit();
-    setTimeout(() => logServer.save().then(process.exit).catch(() => exit(retry + 1)), 500);
+    await halt(500);
+    logServer.save().then(process.exit).catch(() => exit(retry + 1));
 }
 
 function handleConfig(c?: Config) {
@@ -412,7 +426,7 @@ function handleConfig(c?: Config) {
                 resolve();
             });
         } else fs.readFile(PATH.join(__dirname, 'config.json'), 'utf8', async (err, data) => {
-            if (err) return reject(err);
+            if (err) return resolve(await askQuestions().catch(reject));//return reject(err);
             config = JSON.parse(data);
             if (c === undefined) return resolve();
             if (!config.passwordHash) await (function setPassword() {
@@ -432,6 +446,105 @@ function handleConfig(c?: Config) {
             resolve();
         });
     });
+}
+
+function askQuestions() {
+    return new Promise<void>(async (resolve, reject) => {
+        log.info(`Start building configurations...`);
+        let ans = {
+            input: [],
+            output: [],
+            watch: null,
+            passwordHash: null
+        }
+
+        try {
+            await halt(500);
+            await getInput();
+            await getOutput();
+            await getPassword();
+            await getWatch();
+            await getSavePassword();
+            config = ans;
+            await handleConfig(config);
+            resolve();
+        } catch (err) {
+            reject(err);
+        }
+
+
+        function getInput() {
+            return new Promise(resolve => {
+                prompt.ask(`Enter absolute path of folder/file to backup: `).then((path) => {
+                    ans.input.push(path);
+                    (function yn() {
+                        prompt.ask(`More file/folder to backup [Y/N]? `).then(confirm => {
+                            if (confirm.toLowerCase() === 'y') return getInput().then(resolve).catch(reject);
+                            else if (confirm.toLowerCase() === 'n') return resolve();
+                            yn();
+                        });
+                    })();
+                })
+            })
+        }
+
+        function getOutput() {
+            return new Promise(resolve => {
+                prompt.ask(`Enter absolute path of folder to store encrypted file: `).then((path) => {
+                    ans.output.push(path);
+                    (function yn() {
+                        prompt.ask(`More output destination [Y/N]? `).then(confirm => {
+                            if (confirm.toLowerCase() === 'y') return getOutput().then(resolve).catch(reject);
+                            else if (confirm.toLowerCase() === 'n') return resolve();
+                            yn();
+                        });
+                    })();
+                })
+            })
+        }
+
+        function getWatch() {
+            return new Promise(resolve => {
+                (function yn() {
+                    prompt.ask(`Enable watch mode [Y/N]? `).then(confirm => {
+                        if (confirm.toLowerCase() === 'y') return ans.watch = 60, resolve();
+                        else if (confirm.toLowerCase() === 'n') return resolve();
+                        yn();
+                    });
+                })();
+            })
+        }
+
+        function getPassword() {
+            return new Promise(resolve => {
+                prompt.ask('Enter your password for encryption: ').then(password =>
+                    prompt.ask(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(confirm => {
+                        if (confirm.toLowerCase() === 'y') {
+                            ans.passwordHash = hashPassword(password);
+                            resolve();
+                        }
+                        else getPassword().then(resolve);
+                    })
+                );
+            });
+        }
+
+        function getSavePassword() {
+            return new Promise(resolve => {
+                (function yn() {
+                    prompt.ask(`Save your password [Y/N]? `).then(confirm => {
+                        if (confirm.toLowerCase() === 'y') return resolve()
+                        else if (confirm.toLowerCase() === 'n') return nosave = true, resolve();
+                        yn();
+                    });
+                })();
+            })
+        }
+    });
+}
+
+function halt(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 function formatSec(ms: number) {
