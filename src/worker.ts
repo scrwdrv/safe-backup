@@ -42,8 +42,6 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
         for (let i = l; i--;) outputs[i].end();
     });
 
-
-
     folderEncrypt.encrypt({
         input: req.input,
         password: req.passwordHash,
