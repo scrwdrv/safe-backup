@@ -9,6 +9,8 @@ import * as dir from 'recurdir';
 import * as PATH from 'path';
 import * as fs from 'fs';
 
+__dirname = PATH.join(__dirname, '../');
+
 declare global {
     interface Config {
         input: string[];
