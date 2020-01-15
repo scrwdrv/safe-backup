@@ -1,6 +1,6 @@
 {
   "name": "safe-backup",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "A CLI tool that helps you backup file or folder into a single password encrypted file. Using technology of Tar & AES.",
   "main": "init.js",
   "scripts": {
@@ -37,13 +37,14 @@
   "dependencies": {
     "cli-params": "^1.2.1",
     "cluster-ipc-logger": "^1.1.4",
-    "folder-encrypt": "^1.0.8",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.5",
+    "tar-fs": "^2.0.0",
     "worker-communication": "^1.0.3"
   },
   "devDependencies": {
-    "@types/node": "^13.1.6",
+    "@types/node": "^13.1.7",
+    "@types/tar-fs": "^1.16.2",
     "nexe": "^3.3.2"
   }
 }

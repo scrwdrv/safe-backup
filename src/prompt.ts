@@ -62,9 +62,9 @@ export default class Prompt {
                 })
             )
         },
-        getPassword: () => {
+        setPassword: () => {
             return new Promise<string>(resolve =>
-                this.ask('Enter your password for encryption: ').then(password =>
+                this.ask('Set your password for encryption: ').then(password =>
                     this.questions.getYn(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(boo => {
                         if (boo) resolve(password);
                         else this.questions.getPassword().then(resolve);
@@ -72,13 +72,10 @@ export default class Prompt {
                 )
             );
         },
-        getSavePassword: () => {
-            return new Promise<boolean>(resolve =>
-                this.questions.getYn(`Save your password (DO NOT use it on public computers!) [Y/N]? `).then(boo => {
-                    if (boo) resolve(true);
-                    else resolve(false);
-                })
-            )
+        getPassword: () => {
+            return new Promise<string>(resolve =>
+                this.ask('Enter your password for encryption: ').then(resolve)
+            );
         },
         getYn: (question: string) => {
             return new Promise<boolean>(resolve =>
