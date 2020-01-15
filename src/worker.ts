@@ -132,7 +132,7 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
                     return false;
                 },
                 //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
-                ignoreFileRemoved: (nextAbs: string, err: NodeJS.ErrnoException) => {
+                ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
                     if (err.code === 'ENOENT') return true;
                     return false;
                 }
