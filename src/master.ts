@@ -3,6 +3,7 @@ import physicalCores from 'physical-cores';
 import CPC from 'worker-communication';
 import CLIParams from 'cli-params';
 import Prompt from './prompt';
+import * as regex from 'simple-regex-toolkit';
 import * as cluster from 'cluster';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
@@ -17,12 +18,14 @@ declare global {
         input: string[];
         output: string[];
         watch: number;
+        ignore: string[];
         publicKey: string;
     }
     interface BackupOptions {
         input: string;
         output: string[];
         publicKey: string;
+        ignore: string[];
     }
     interface DecryptOptions {
         input: string;
@@ -43,7 +46,7 @@ const cpc = new CPC(),
     }),
     helpText = `
 Usage:
-    safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] --output <outputPath1> [outputPath2 [outputPath3 ...]] [--watch [interval]] 
+    safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] --output <outputPath1> [outputPath2 [outputPath3 ...]] [--watch [interval]] [--ignore <regex> [regex [regex...]] 
     safe-backup --decrypt <backupPath> [--password <password>]
     safe-backup --help
     safe-backup --version
@@ -55,6 +58,7 @@ Options:
     -i --input          Absolute path(s) of folder/file to backup, separate by space.
     -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
     -w --watch          Enable watch mode.
+    -I --ignore         Add ignore rule with regex.  
     -d --decrypt        Absolute path of encrypted file to decrypt.
     -p --password       Password for decryption (not recommended to use password in command line).
     -h --help           Show this screen.
@@ -71,13 +75,12 @@ let config: Config = {} as any,
     publicKey: string,
     exitState = 0;
 
-
 (async function init() {
 
     try {
 
         await parseParams();
-        await handleConfig(Object.keys(config).length > 1 ? config : null);
+        await handleConfig(Object.keys(config).length ? config : null);
         await dir.mk(config.output);
         await getPassword();
 
@@ -88,7 +91,7 @@ let config: Config = {} as any,
 
         for (let i = config.input.length; i--;)
             promises.push(
-                backup({ input: config.input[i], output: config.output, publicKey: publicKey })
+                backup({ input: config.input[i], output: config.output, publicKey: publicKey, ignore: config.ignore || [] })
                     .then(() => {
                         if (config.watch) return fs.stat(config.input[i], (err, stats) => {
                             if (err) return log.debug(err),
@@ -131,6 +134,12 @@ function parseParams() {
                         param: 'output',
                         type: 'array-of-string',
                         alias: 'o'
+                    },
+                    {
+                        param: 'ignore',
+                        type: 'array-of-string',
+                        optional: true,
+                        alias: 'I'
                     }
                 ],
                 id: 'regular'
@@ -198,6 +207,14 @@ function parseParams() {
                         config.input = args.input;
                         config.output = args.output;
                         config.watch = args.watch;
+                        if (args.ignore) {
+                            config.ignore = [];
+                            for (let i = args.ignore.length; i--;) {
+                                if (regex.isRegex(args.ignore[i]))
+                                    config.ignore.push(args.ignore[i]);
+                                else return log.error(`Invalid regex [${args.ignore[i]}]`), reject();
+                            }
+                        }
                         resolve();
                         break;
                     case 'decrypt':
@@ -278,11 +295,11 @@ function handleConfig(c?: Config) {
         else fs.readFile(PATH.join(__dirname, 'config.json'), 'utf8', async (err, data) => {
             if (c === undefined) {
                 if (err) return reject(err);
-                else config = { ...config, ...JSON.parse(data) };
+                else config = JSON.parse(data);
                 resolve();
             } else {
                 if (err) await askQuestions().catch(reject);
-                else config = { ...config, ...JSON.parse(data) };
+                else config = JSON.parse(data);
                 checkPath();
             }
         });
@@ -390,7 +407,8 @@ function backupDaemon(input: string) {
         backup({
             input: input,
             output: config.output,
-            publicKey: publicKey
+            publicKey: publicKey,
+            ignore: config.ignore || []
         }, modified[input]).then(() =>
             setTimeout(backupDaemon, config.watch * 1000, input));
         delete modified[input];
@@ -405,6 +423,14 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
     }
 
     const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
+        if (config.ignore) {
+            const arr = file.split(PATH.sep);
+            for (let i = config.ignore.length; i--;) {
+                const reg = regex.from(config.ignore[i]);
+                if (reg.test(file) || arr.indexOfRegex(reg) > -1) return;
+            }
+        }
+
         modified[path] ? modified[path]++ : modified[path] = 1;
         log.info(`File modified [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
     }).on('error', (err) => {
@@ -449,7 +475,7 @@ async function exit(retry: number = 0) {
 
     if (l) {
         exitState = 2;
-        log.warn(`${l} task${l ? 's' : ''} still running, hang on...`);
+        log.warn(`${l} task${l > 1 ? 's' : ''} still running, hang on...`);
         log.warn(`Ctrl+C again to force exit [NOT RECOMMENDED]`);
         await new Promise<void>(resolve => {
             const interval = setInterval(() => {

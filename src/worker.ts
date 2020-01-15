@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as PATH from 'path';
 import * as tar from 'tar-fs';
 import * as crypto from 'crypto';
+import * as regex from 'simple-regex-toolkit';
 
 __dirname = PATH.join(__dirname, '../');
 process.on('SIGINT', () => { });
@@ -67,7 +68,7 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
 
 }).onMaster('backup', async (req: BackupOptions, res) => {
 
-    log.info(`Syncing...[${formatPath(req.input)
+    log.info(`Syncing... [${formatPath(req.input)
         }]`)
 
     const l = req.output.length,
@@ -84,7 +85,7 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
         bytes = 0;
 
     for (let i = l; i--;)
-        outputs.push(fs.createWriteStream(PATH.join(req.output[i], name)));
+        outputs.push(fs.createWriteStream(PATH.join(req.output[i], name + '.temp')));
 
     const key = crypto.randomBytes(32),
         iv = crypto.randomBytes(12),
@@ -104,10 +105,12 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
 
         for (let i = l; i--;)
             promises.push(new Promise<void>((resolve, reject) =>
-                outputs[i].write(authTag, err => {
-                    if (err) return reject(err);
-                    outputs[i].end(resolve);
-                })
+                outputs[i].end(authTag, () =>
+                    fs.rename(PATH.join(req.output[i], name + '.temp'), PATH.join(req.output[i], name), (err) => {
+                        if (err) return reject(err)
+                        resolve()
+                    })
+                )
             ));
 
         Promise.all(promises).then(() => res(null, bytes)).catch(res);
@@ -117,7 +120,18 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
         if (err) return res(err);
         writeStream.write(crypto.publicEncrypt(req.publicKey, key), err => {
             if (err) return res(err);
-            (isFile ? fs.createReadStream : tar.pack)(req.input).on('error', res).pipe(cipher).pipe(writeStream);
+            if (isFile) fs.createReadStream(req.input).on('error', res).pipe(cipher).pipe(writeStream);
+            else tar.pack(req.input, {
+                ignore: (file) => {
+                    const arr = file.split(PATH.sep);
+                    for (let i = req.ignore.length; i--;) {
+                        const reg = regex.from(req.ignore[i]);
+                        if (reg.test(file) || arr.indexOfRegex(reg) > -1)
+                            return true;
+                    }
+                    return false;
+                }
+            }).on('error', res).pipe(cipher).pipe(writeStream)
         });
     });
 
@@ -131,24 +145,24 @@ function getHead(path: string) {
 
             fs.open(path, 'r', (err, fd) => {
                 if (err) return reject(err);
-                let buffer = Buffer.alloc(525),
-                    buffer2 = Buffer.alloc(16);
+                let prefix = Buffer.alloc(525),
+                    suffix = Buffer.alloc(16);
 
-                fs.read(fd, buffer, 0, 525, 0, err => {
+                fs.read(fd, prefix, 0, 525, 0, err => {
                     if (err) return reject(err);
 
-                    fs.read(fd, buffer2, 0, 16, from, err => {
+                    fs.read(fd, suffix, 0, 16, from, err => {
                         if (err) return reject(err);
 
                         let head: Head = {
-                            iv: buffer.slice(1, 13),
+                            iv: prefix.slice(1, 13),
                             isFile: null,
-                            encrypted: buffer.slice(13),
-                            authTag: buffer2,
+                            encrypted: prefix.slice(13),
+                            authTag: suffix,
                             end: from
                         }
 
-                        switch (buffer.slice(0, 1).toString('utf8')) {
+                        switch (prefix.slice(0, 1).toString('utf8')) {
                             case 'D':
                                 head.isFile = false;
                                 break;
