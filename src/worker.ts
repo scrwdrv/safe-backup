@@ -86,7 +86,6 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                     next();
                 }
             }).on('finish', () => {
-                console.log('f')
                 const authTag = cipher.getAuthTag();
                 let promises = [];
 
