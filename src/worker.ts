@@ -7,9 +7,7 @@ import * as tar from 'tar-fs';
 import * as crypto from 'crypto';
 import * as regex from 'simple-regex-toolkit';
 
-__dirname = PATH.join(__dirname, '../');
 process.on('SIGINT', () => { });
-
 
 type Prefix = {
     isFile: boolean;
@@ -29,7 +27,8 @@ type Head = {
 const cpc = new CPC(),
     log = new loggerClient({
         system: 'worker',
-        cluster: process.env.workerId
+        cluster: process.env.workerId,
+        debug: false
     });
 
 cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
@@ -226,7 +225,6 @@ function readHead(path: string) {
 }
 
 function splitBuffer(buffer: Buffer, split: Buffer | string) {
-
     let search = -1, lines = [];
 
     while ((search = buffer.indexOf(split)) > -1) {
@@ -235,52 +233,8 @@ function splitBuffer(buffer: Buffer, split: Buffer | string) {
     }
 
     lines.push(buffer);
-
     return lines;
 }
-
-/* function getHead(path: string) {
-    return new Promise<Head>((resolve, reject) => {
-        fs.stat(path, (err, stats) => {
-            if (err) return reject(err);
-            const from = stats.size - 16;
-
-            fs.open(path, 'r', (err, fd) => {
-                if (err) return reject(err);
-                let prefix = Buffer.alloc(525),
-                    suffix = Buffer.alloc(16);
-
-                fs.read(fd, prefix, 0, 525, 0, err => {
-                    if (err) return reject(err);
-
-                    fs.read(fd, suffix, 0, 16, from, err => {
-                        if (err) return reject(err);
-
-                        let head: Head = {
-                            iv: prefix.slice(1, 13),
-                            isFile: null,
-                            encrypted: prefix.slice(13),
-                            authTag: suffix,
-                            end: from
-                        }
-
-                        switch (prefix.slice(0, 1).toString('utf8')) {
-                            case 'D':
-                                head.isFile = false;
-                                break;
-                            case 'F':
-                                head.isFile = true;
-                                break;
-                            default:
-                                return reject(`Unknown type`);
-                        }
-                        resolve(head);
-                    });
-                });
-            });
-        });
-    });
-} */
 
 function formatPath(p: string, max: number = 30) {
     const l = p.length

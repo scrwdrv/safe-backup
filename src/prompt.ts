@@ -2,21 +2,17 @@ import * as readline from 'readline';
 
 export default class Prompt {
     private rl: readline.Interface;
-    private asking = false;
     private getRl() {
         this.rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout,
             terminal: false
-        }).on('SIGINT', () => {
-            if (this.asking) process.exit()
-        });
+        })
     }
 
     ask(question: string) {
         return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
-            this.asking = true;
             this.rl.question('\n' + question + '\n \x1b[36m\x1b[1m>\x1b[0m ', (val) => {
                 this.end();
                 resolve(val);
@@ -25,10 +21,8 @@ export default class Prompt {
     }
 
     end() {
-        this.rl.removeAllListeners('SIGINT');
         this.rl.close();
         this.rl = null;
-        this.asking = false;
     }
 
     public questions = {

@@ -39,13 +39,13 @@ declare global {
 const cpc = new CPC(),
     prompt = new Prompt(),
     logServer = new loggerServer({
-        debug: false,
         directory: PATH.join(__dirname, 'logs'),
         saveInterval: 60000
     }),
     log = new loggerClient({
         system: 'master',
-        cluster: 0
+        cluster: 0,
+        debug: false
     }),
     helpText = `
 Usage:
@@ -287,7 +287,6 @@ function askQuestions() {
     return new Promise<void>(async (resolve, reject) => {
         log.info(`Start building configurations...`);
         try {
-            await halt(500);
             config.input = await prompt.questions.getInput();
             config.output = await prompt.questions.getOutput();
             config.watch = await prompt.questions.getWatch();
@@ -336,7 +335,6 @@ function getPassword() {
             resolve();
         });
         async function setPassword() {
-            await halt(500);
 
             const hash = hashPassword(await prompt.questions.setPassword()).toString('hex');
 
@@ -503,14 +501,8 @@ async function exit(retry: number = 0) {
             .removeAllListeners('exit')
             .kill();
 
-    await halt(500);
-
     exitState = 2;
     logServer.save().then(process.exit).catch(() => exit(retry + 1));
-}
-
-function halt(ms: number) {
-    return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
 function formatSec(ms: number) {
