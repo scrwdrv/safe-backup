@@ -10,12 +10,20 @@ import * as regex from 'simple-regex-toolkit';
 __dirname = PATH.join(__dirname, '../');
 process.on('SIGINT', () => { });
 
-type Head = {
-    iv: Buffer;
+
+type Prefix = {
     isFile: boolean;
-    encrypted: Buffer;
-    authTag: Buffer;
-    end: number;
+    iv: Buffer;
+    encryptedPassword: Buffer;
+    encryptedPrivateKey: Buffer;
+    length: number;
+}
+
+type Head = {
+    lengthMap: number[];
+    bytesLength: number;
+    prefix: Prefix;
+    suffix: Buffer;
 }
 
 const cpc = new CPC(),
@@ -24,52 +32,38 @@ const cpc = new CPC(),
         cluster: process.env.workerId
     });
 
-cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
-    log.info(`Reading encrypted private key...`)
+cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
-    fs.readFile(PATH.join(__dirname, 'keys', 'private.safe'), async (err, data) => {
-        if (err) return res(err);
+    log.info(`Decrypting & extracting file... [${formatPath(req.input)}]`);
 
-        log.info(`Decrypting private key... [${formatPath(PATH.join(__dirname, 'keys', 'private.safe'))}] `);
+    try {
 
-        try {
-
-            const decipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(req.passwordHash), data.slice(-12)).setAuthTag(data.slice(-28, -12)),
-                encodedPrivateKey = Buffer.concat([decipher.update(data.slice(0, -28)), decipher.final()]);
-
-            log.info(`Decoding private key with passphrase...`);
-
-            const privateKey = crypto.createPrivateKey({
-                key: encodedPrivateKey,
+        const head = await readHead(req.input),
+            decipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(req.passwordHash), head.prefix.encryptedPrivateKey.slice(-12)).setAuthTag(head.prefix.encryptedPrivateKey.slice(-28, -12)),
+            privateKey = crypto.createPrivateKey({
+                key: Buffer.concat([decipher.update(head.prefix.encryptedPrivateKey.slice(0, -28)), decipher.final()]),
                 format: 'pem',
                 passphrase: req.passwordHash
-            });
+            }),
+            key = crypto.privateDecrypt(privateKey, head.prefix.encryptedPassword),
+            input = PATH.parse(req.input),
+            output = PATH.join(input.dir, input.name),
+            outputStream = head.prefix.isFile ? fs.createWriteStream(output) : tar.extract(output);
 
-            log.info(`Decrypting password of the encryption...`);
+        outputStream.on('finish', res);
 
-            const head = await getHead(req.input),
-                key = crypto.privateDecrypt(privateKey, head.encrypted);
+        fs.createReadStream(req.input, { start: head.prefix.length, end: head.bytesLength - 16 - 1 })
+            .pipe(crypto.createDecipheriv('aes-256-gcm', key, head.prefix.iv).setAuthTag(head.suffix))
+            .pipe(outputStream);
 
-            log.info(`Decrypting file... [${formatPath(req.input)}]`);
-
-            const input = PATH.parse(req.input),
-                output = PATH.join(input.dir, input.name),
-                outputStream = head.isFile ? fs.createWriteStream(output) : tar.extract(output);
-
-            outputStream.on('finish', res);
-            fs.createReadStream(req.input, { start: 525, end: head.end - 1 })
-                .pipe(crypto.createDecipheriv('aes-256-gcm', key, head.iv).setAuthTag(head.authTag))
-                .pipe(outputStream)
-
-        } catch (err) {
-            res(err);
-        }
-    });
+    } catch (err) {
+        log.debug(err);
+        res(err);
+    }
 
 }).onMaster('backup', async (req: BackupOptions, res) => {
 
-    log.info(`Syncing... [${formatPath(req.input)
-        }]`)
+    log.info(`Syncing & encrypting ... [${formatPath(req.input)}]`)
 
     const l = req.output.length,
         name = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
@@ -99,6 +93,7 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
         }
     }).on('finish', () => {
         const authTag = cipher.getAuthTag();
+
         bytes += authTag.length;
 
         let promises = [];
@@ -116,33 +111,135 @@ cpc.onMaster('decrypt', (req: DecryptOptions, res) => {
         Promise.all(promises).then(() => res(null, bytes)).catch(res);
     });
 
-    writeStream.write(Buffer.concat([Buffer.from(isFile ? 'F' : 'D'), iv]), err => {
+    const buffers = [Buffer.from(isFile ? 'F' : 'D'), iv, crypto.publicEncrypt(req.publicKey, key), Buffer.from(req.privateKey, 'hex')];
+
+    writeStream.write(Buffer.concat([
+        Buffer.from('[' + buffers.map((b) => { return b.length }).join(',') + ']', 'utf8'),
+        ...buffers
+    ]), err => {
         if (err) return res(err);
-        writeStream.write(crypto.publicEncrypt(req.publicKey, key), err => {
-            if (err) return res(err);
-            if (isFile) fs.createReadStream(req.input).on('error', res).pipe(cipher).pipe(writeStream);
-            else tar.pack(req.input, {
-                ignore: (file) => {
-                    const arr = file.split(PATH.sep);
-                    for (let i = req.ignore.length; i--;) {
-                        const reg = regex.from(req.ignore[i]);
-                        if (reg.test(file) || arr.indexOfRegex(reg) > -1)
-                            return true;
-                    }
-                    return false;
-                },
-                //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
-                ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
-                    if (err.code === 'ENOENT') return true;
-                    return false;
+        if (isFile) fs.createReadStream(req.input).on('error', res).pipe(cipher).pipe(writeStream);
+        else tar.pack(req.input, {
+            ignore: (file) => {
+                const arr = file.split(PATH.sep);
+                for (let i = req.ignore.length; i--;) {
+                    const reg = regex.from(req.ignore[i]);
+                    if (reg.test(file) || arr.indexOfRegex(reg) > -1)
+                        return true;
                 }
-            }).on('error', res).pipe(cipher).pipe(writeStream)
-        });
+                return false;
+            },
+            strict: false,
+            //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
+            ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
+                if (err.code === 'ENOENT') return true;
+                return false;
+            }
+        }).on('error', res).pipe(cipher).pipe(writeStream);
     });
 
 });
 
-function getHead(path: string) {
+function readHead(path: string) {
+    return new Promise<Head>(async (resolve, reject) => {
+
+        let head: Head = {} as any;
+
+        try {
+
+            head.lengthMap = await new Promise<number[]>((resolve, reject) => {
+
+                let buffer: Buffer,
+                    index = -1;
+
+                const lookingFor = Buffer.from(']'),
+                    readStream = fs.createReadStream(path, { highWaterMark: 64 }).on('data', data => {
+                        if (!buffer) buffer = data;
+                        else buffer = Buffer.concat([buffer, data]);
+                        index = buffer.indexOf(lookingFor);
+                        if (index > -1) readStream.close();
+                    }).on('close', () => {
+
+                        if (index === -1) return reject(`Prefix not found`);
+
+                        const lengthMap = splitBuffer(buffer.slice(1, index), ',').map(b => {
+                            return parseInt(b);
+                        });
+
+                        if (lengthMap.length !== 4) return reject(`Invalid prefix`);
+                        resolve(lengthMap);
+                    })
+            });
+
+            head.bytesLength = await new Promise<number>((resolve, reject) => fs.stat(path, (err, stats) => {
+                if (err) return reject(err);
+                resolve(stats.size);
+            }));
+
+            head.prefix = await new Promise<Prefix>((resolve, reject) => {
+                fs.open(path, 'r', (err, fd) => {
+                    if (err) return reject(err);
+
+                    const indexMapLength = head.lengthMap.join(',').length + 2,
+                        prefixLength = head.lengthMap.reduce((a, b) => a + b);
+
+                    fs.read(fd, Buffer.alloc(prefixLength), 0, prefixLength, indexMapLength, (err, bytesLength, buffer) => {
+                        if (err) return reject(err);
+
+                        let prefix: Prefix = {
+                            isFile: null,
+                            iv: buffer.slice(head.lengthMap[0], head.lengthMap[0] + head.lengthMap[1]),
+                            encryptedPassword: buffer.slice(head.lengthMap[0] + head.lengthMap[1], head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2]),
+                            encryptedPrivateKey: buffer.slice(head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2], head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2] + head.lengthMap[3]),
+                            length: indexMapLength + prefixLength
+                        }
+
+                        const type = buffer.slice(0, head.lengthMap[0]).toString('utf8');
+
+                        switch (type) {
+                            case 'D':
+                                prefix.isFile = false;
+                                break;
+                            case 'F':
+                                prefix.isFile = true;
+                                break;
+                            default:
+                                return reject('Unknown type');
+                        }
+
+                        fs.read(fd, Buffer.alloc(16), 0, 16, head.bytesLength - 16, (err, bytesLength, buffer) => {
+                            if (err) return reject(err);
+                            head.suffix = buffer;
+                            resolve(prefix);
+                        });
+                    });
+                });
+            });
+
+        } catch (err) {
+            return reject(err)
+        }
+
+        resolve(head);
+
+    });
+}
+
+function splitBuffer(buffer: Buffer, split: Buffer | string) {
+
+    let search = -1, lines = [];
+
+    while ((search = buffer.indexOf(split)) > -1) {
+        lines.push(buffer.slice(0, search));
+        buffer = buffer.slice(search + split.length);
+    }
+
+    lines.push(buffer);
+
+    return lines;
+}
+
+/* function getHead(path: string) {
     return new Promise<Head>((resolve, reject) => {
         fs.stat(path, (err, stats) => {
             if (err) return reject(err);
@@ -183,7 +280,7 @@ function getHead(path: string) {
             });
         });
     });
-}
+} */
 
 function formatPath(p: string, max: number = 30) {
     const l = p.length
