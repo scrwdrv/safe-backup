@@ -4,13 +4,13 @@ import CPC from 'worker-communication';
 import CLIParams from 'cli-params';
 import Prompt from './prompt';
 import * as regex from 'simple-regex-toolkit';
+import getAppDataPath from "appdata-path";
 import * as cluster from 'cluster';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
 import * as PATH from 'path';
 import * as fs from 'fs';
 
-__dirname = PATH.join(__dirname, '../');
 process.on('SIGINT', () => exit());
 
 declare global {
@@ -36,10 +36,11 @@ declare global {
     }
 }
 
-const cpc = new CPC(),
+const appDataPath = getAppDataPath('safe-backup'),
+    cpc = new CPC(),
     prompt = new Prompt(),
     logServer = new loggerServer({
-        directory: PATH.join(__dirname, 'logs'),
+        directory: PATH.join(appDataPath, 'logs'),
         saveInterval: 60000
     }),
     log = new loggerClient({
@@ -60,6 +61,10 @@ Usage:
     safe-backup --config
     safe-backup --build-config
     safe-backup --reset-key
+    safe-backup --log
+
+    safe-backup --export-key [path]
+    safe-backup --import-key <path>
 
 Options:
     -i --input          Absolute path(s) of folder/file to backup, separate by space.
@@ -69,13 +74,17 @@ Options:
 
     -d --decrypt        Absolute path of encrypted file to decrypt.
     -p --password       Password for decryption (not recommended to use password in command line).
-    
+
     -h --help           Show this screen.
     -v --version        Show version.
     -c --config         Show current configuration.
     -b --build-config   Start building configurations.
     --reset-key         Delete both public & private key, 
                         previously encrypted files can still decrypt by original password.
+    -l --log            Show location of log files.
+
+    --export-key        Export current key.
+    --import-key        Import previously generated key.
     `;
 
 let config: Config = {} as any,
@@ -95,6 +104,7 @@ let config: Config = {} as any,
 
     try {
 
+        await dir.mk(appDataPath);
         await parseParams();
         await handleConfig(Object.keys(config).length ? config : null);
         await dir.mk(config.output);
@@ -214,6 +224,29 @@ function parseParams() {
                 },
                 id: 'reset-key'
             })
+            .add({
+                params: {
+                    param: 'log',
+                    type: 'boolean',
+                    alias: 'l'
+                },
+                id: 'log'
+            })
+            .add({
+                params: {
+                    param: 'export-key',
+                    type: 'string',
+                    default: PATH.join(process.cwd(), 'key.safe')
+                },
+                id: 'export-key'
+            })
+            .add({
+                params: {
+                    param: 'import-key',
+                    type: 'string'
+                },
+                id: 'import-key'
+            })
             .exec(async (err, args, id) => {
                 if (err)
                     if (process.argv.length === 2) log.info('No parameters were found, restoring configurations...'), resolve();
@@ -255,7 +288,7 @@ function parseParams() {
                         reject();
                         break;
                     case 'version':
-                        console.log(`safe-backup version ${JSON.parse(fs.readFileSync(PATH.join(__dirname, 'package.json'), 'utf8')).version}`);
+                        console.log(`safe-backup version ${JSON.parse(fs.readFileSync(PATH.join(__dirname, '../', 'package.json'), 'utf8')).version}`);
                         reject();
                         break;
                     case 'config':
@@ -274,13 +307,44 @@ function parseParams() {
                         break;
                     case 'reset-key':
                         if (await prompt.questions.getYn(`Are you sure you wanna reset your key [Y/N]?`))
-                            fs.unlink(PATH.join(__dirname, 'key.safe'), (err) => {
+                            fs.unlink(PATH.join(appDataPath, 'key.safe'), (err) => {
                                 if (err.code === 'ENOENT') console.log('There is no key');
                                 else if (err) log.debug(err), console.log('Failed to delete key.safe');
                                 else console.log('key deleted');
                                 reject();
                             });
                         else reject();
+                        break;
+                    case 'log':
+                        console.log(PATH.join(appDataPath, 'logs'))
+                        reject();
+                        break;
+                    case 'export-key':
+                        fs.readFile(PATH.join(appDataPath, 'key.safe'), 'utf8', (err, data) => {
+                            if (err) return log.debug(err), console.log('Key pair not found'), reject();
+                            fs.writeFile(args['export-key'], data, (err) => {
+                                if (err) log.debug(err), console.log('Failed to export key');
+                                else console.log(`Key exported to  ${PATH.resolve(args['export-key'])}`);
+                                reject();
+                            });
+                        });
+                        break;
+                    case 'import-key':
+                        fs.readFile(args['import-key'], 'utf8', (err, data) => {
+                            if (err) return log.debug(err), console.log(`Key pair not at ${PATH.resolve(args['import-key'])}`), reject();
+                            try {
+                                const key = JSON.parse(data);
+                                if (!key.public || !key.private) throw null;
+                                fs.writeFile(PATH.join(appDataPath, 'key.safe'), data, (err) => {
+                                    if (err) log.debug(err), console.log('Failed to import key');
+                                    else console.log(`Key imported`);
+                                    reject();
+                                });
+                            } catch (err) {
+                                console.log(`Invalid key pair`);
+                                reject();
+                            }
+                        })
                         break;
                 }
             })
@@ -304,11 +368,11 @@ function askQuestions() {
 
 function handleConfig(c?: Config) {
     return new Promise<void>((resolve, reject) => {
-        if (c) fs.writeFile(PATH.join(__dirname, 'config.json'), JSON.stringify(c, null, 4), (err) => {
+        if (c) fs.writeFile(PATH.join(appDataPath, 'config.json'), JSON.stringify(c, null, 4), (err) => {
             if (err) return reject(err);
             checkPath();
         })
-        else fs.readFile(PATH.join(__dirname, 'config.json'), 'utf8', async (err, data) => {
+        else fs.readFile(PATH.join(appDataPath, 'config.json'), 'utf8', async (err, data) => {
             if (c === undefined) {
                 if (err) return reject(err);
                 else config = JSON.parse(data);
@@ -332,7 +396,7 @@ function handleConfig(c?: Config) {
 
 function getPassword() {
     return new Promise<void>(async (resolve, reject) => {
-        fs.readFile(PATH.join(__dirname, 'key.safe'), 'utf8', (err, data) => {
+        fs.readFile(PATH.join(appDataPath, 'key.safe'), 'utf8', (err, data) => {
             if (err) return log.warn(`Key pair not found, let's make one!`), setPassword();
             keys = JSON.parse(data);
             if (!keys.public || !keys.private) return reject(`Invalid key file`)
@@ -367,9 +431,9 @@ function getPassword() {
                 keys.public = publicKey;
                 keys.private = privateKey;
 
-                fs.writeFile(PATH.join(__dirname, 'key.safe'), JSON.stringify(keys), (err) => {
+                fs.writeFile(PATH.join(appDataPath, 'key.safe'), JSON.stringify(keys), (err) => {
                     if (err) return reject(err);
-                    log.info(`Public & private key generated at ${PATH.join(__dirname, 'key.safe')}`);
+                    log.info(`Public & private key generated at ${PATH.join(appDataPath, 'key.safe')}`);
                     resolve();
                 });
             });
