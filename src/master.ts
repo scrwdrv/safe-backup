@@ -434,30 +434,31 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
         return setTimeout(watchMod, 600000, path, isFile, 0);
     }
 
-    const watcher = fs.watch(path, { recursive: !isFile }, (evt, file) => {
-        if (config.ignore) {
-            const arr = file.split(PATH.sep);
-            for (let i = config.ignore.length; i--;) {
-                const reg = regex.from(config.ignore[i]);
-                if (reg.test(file) || arr.indexOfRegex(reg) > -1) return;
+    const watcher =
+        fs.watch(path, { recursive: !isFile }, (evt, file) => {
+            if (regs) {
+                const arr = file.split(PATH.sep);
+                for (let i = regs.length; i--;)
+                    if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
             }
-        }
 
-        modified[path] ? modified[path]++ : modified[path] = 1;
-        log.info(`File modified [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
-    }).on('error', (err) => {
-        log.debug(err);
-        log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
-        watcher.removeAllListeners('close');
-        watcher.close();
-        clearTimeout(timeout);
-        setTimeout(watchMod, 10000, path, isFile, retry + 1);
-    }).on('close', () => {
-        clearTimeout(timeout);
-        setTimeout(watchMod, 10000, path, isFile, retry + 1);
-    }), timeout = setTimeout(() => {
-        retry = 0;
-    }, 60000);
+            modified[path] ? modified[path]++ : modified[path] = 1;
+            log.info(`File modified [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
+        }).on('error', (err) => {
+            log.debug(err);
+            log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
+            watcher.removeAllListeners('close');
+            watcher.close();
+            clearTimeout(timeout);
+            setTimeout(watchMod, 10000, path, isFile, retry + 1);
+        }).on('close', () => {
+            clearTimeout(timeout);
+            setTimeout(watchMod, 10000, path, isFile, retry + 1);
+        }),
+        timeout = setTimeout(() => retry = 0, 60000),
+        regs = config.ignore ? config.ignore.map(str => {
+            return regex.from(str)
+        }) : null;
 }
 
 function safetyGuard() {
@@ -505,6 +506,10 @@ async function exit(retry: number = 0) {
     logServer.save().then(process.exit).catch(() => exit(retry + 1));
 }
 
+function hashPassword(p: string, salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9') {
+    return crypto.createHash('sha256').update(p + salt).digest();
+}
+
 function formatSec(ms: number) {
     return (ms / 1000).toFixed(2);
 }
@@ -518,13 +523,9 @@ function formatPath(p: string, max: number = 30) {
     return p;
 }
 
-function hashPassword(p: string, salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9') {
-    return crypto.createHash('sha256').update(p + salt).digest();
-}
-
-function prettyJSON(obj: { [key: string]: any }) {
-    const json = JSON.stringify(obj, null, 4);
-    return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+function prettyJSON(json: { [key: string]: any } | string) {
+    const str = typeof json === 'string' ? json : JSON.stringify(json, null, 4);
+    return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
         (match) => {
             let cls = '\x1b[35m\x1b[1m';
             if (/^"/.test(match)) {

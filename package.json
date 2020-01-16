@@ -1,6 +1,6 @@
 {
   "name": "safe-backup",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "A real-time backup CLI tool written in Typescript. safe-back helps you sync file/folder into a single password encrypted storage. Using technology of RSA, AES & Tar.",
   "main": "init.js",
   "scripts": {
@@ -42,7 +42,7 @@
     "recurdir": "^1.0.5",
     "simple-regex-toolkit": "^1.0.3",
     "tar-fs": "github:cloudron-io/tar-fs#ignore_file_removed",
-    "worker-communication": "^1.0.3"
+    "worker-communication": "^1.0.4"
   },
   "devDependencies": {
     "@types/node": "^13.1.7",

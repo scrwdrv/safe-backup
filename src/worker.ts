@@ -15,14 +15,14 @@ type Prefix = {
     encryptedPassword: Buffer;
     encryptedPrivateKey: Buffer;
     length: number;
-}
+};
 
 type Head = {
     lengthMap: number[];
     bytesLength: number;
     prefix: Prefix;
     suffix: Buffer;
-}
+};
 
 const cpc = new CPC(),
     log = new loggerClient({
@@ -62,80 +62,83 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
 }).onMaster('backup', async (req: BackupOptions, res) => {
 
-    log.info(`Syncing & encrypting ... [${formatPath(req.input)}]`)
-
-    const l = req.output.length,
-        name = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
-        isFile = await new Promise<boolean>((resolve: (isFile: boolean) => void) => {
-            fs.stat(req.input, (err, stats) => {
-                if (err) return res(err);
-                resolve(stats.isFile());
-            });
+    const isFile = await new Promise<boolean>((resolve: (isFile: boolean) => void) => {
+        fs.stat(req.input, (err, stats) => {
+            if (err) return res(err);
+            resolve(stats.isFile());
         });
+    });
 
-    let writeStream: Writable,
-        outputs: fs.WriteStream[] = [],
-        bytes = 0;
+    log.info(`Syncing & encrypting ${isFile ? 'file' : 'folder'}... [${formatPath(req.input)}]`);
 
-    for (let i = l; i--;)
-        outputs.push(fs.createWriteStream(PATH.join(req.output[i], name + '.temp')));
+    try {
 
-    const key = crypto.randomBytes(32),
-        iv = crypto.randomBytes(12),
-        cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        const l = req.output.length,
+            name = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
+            key = crypto.randomBytes(32),
+            iv = crypto.randomBytes(12),
+            cipher = crypto.createCipheriv('aes-256-gcm', key, iv),
+            buffers = [Buffer.from(isFile ? 'F' : 'D'), iv, crypto.publicEncrypt(req.publicKey, key), Buffer.from(req.privateKey, 'hex')],
+            writeStream = new Writable({
+                write(chunk, encoding, next) {
+                    bytesLength += chunk.length;
+                    for (let i = l; i--;) outputs[i].write(chunk);
+                    next();
+                }
+            }).on('finish', () => {
+                console.log('f')
+                const authTag = cipher.getAuthTag();
+                let promises = [];
 
-    writeStream = new Writable({
-        write(chunk, encoding, next) {
-            bytes += chunk.length;
-            for (let i = l; i--;) outputs[i].write(chunk);
-            next();
-        }
-    }).on('finish', () => {
-        const authTag = cipher.getAuthTag();
+                bytesLength += authTag.length;
 
-        bytes += authTag.length;
+                for (let i = l; i--;)
+                    promises.push(new Promise<void>((resolve, reject) =>
+                        outputs[i].end(authTag, () =>
+                            fs.rename(PATH.join(req.output[i], name + '.temp'), PATH.join(req.output[i], name), (err) => {
+                                if (err) return reject(err)
+                                resolve()
+                            })
+                        )
+                    ));
 
-        let promises = [];
+                Promise.all(promises).then(() => res(null, bytesLength)).catch(res);
+            }),
+            regs = req.ignore.map(str => {
+                return regex.from(str)
+            });
+
+        let outputs: fs.WriteStream[] = [],
+            bytesLength = 0;
 
         for (let i = l; i--;)
-            promises.push(new Promise<void>((resolve, reject) =>
-                outputs[i].end(authTag, () =>
-                    fs.rename(PATH.join(req.output[i], name + '.temp'), PATH.join(req.output[i], name), (err) => {
-                        if (err) return reject(err)
-                        resolve()
-                    })
-                )
-            ));
+            outputs.push(fs.createWriteStream(PATH.join(req.output[i], name + '.temp')));
 
-        Promise.all(promises).then(() => res(null, bytes)).catch(res);
-    });
-
-    const buffers = [Buffer.from(isFile ? 'F' : 'D'), iv, crypto.publicEncrypt(req.publicKey, key), Buffer.from(req.privateKey, 'hex')];
-
-    writeStream.write(Buffer.concat([
-        Buffer.from('[' + buffers.map((b) => { return b.length }).join(',') + ']', 'utf8'),
-        ...buffers
-    ]), err => {
-        if (err) return res(err);
-        if (isFile) fs.createReadStream(req.input).on('error', res).pipe(cipher).pipe(writeStream);
-        else tar.pack(req.input, {
-            ignore: (file) => {
-                const arr = file.split(PATH.sep);
-                for (let i = req.ignore.length; i--;) {
-                    const reg = regex.from(req.ignore[i]);
-                    if (reg.test(file) || arr.indexOfRegex(reg) > -1)
-                        return true;
+        writeStream.write(Buffer.concat([
+            Buffer.from('[' + buffers.map((b) => { return b.length }).join(',') + ']', 'utf8'),
+            ...buffers
+        ]), err => {
+            if (err) return res(err), writeStream.destroy();
+            if (isFile) fs.createReadStream(req.input).pipe(cipher).pipe(writeStream);
+            else tar.pack(req.input, {
+                ignore: (file) => {
+                    const arr = file.split(PATH.sep);
+                    for (let i = regs.length; i--;)
+                        if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return true;
+                    return false;
+                },
+                strict: false,
+                //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
+                ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
+                    if (err.code === 'ENOENT') return true;
+                    return false;
                 }
-                return false;
-            },
-            strict: false,
-            //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
-            ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
-                if (err.code === 'ENOENT') return true;
-                return false;
-            }
-        }).on('error', res).pipe(cipher).pipe(writeStream);
-    });
+            }).pipe(cipher).pipe(writeStream);
+        });
+    } catch (err) {
+        log.debug(err);
+        res(err);
+    }
 
 });
 
@@ -224,6 +227,10 @@ function readHead(path: string) {
     });
 }
 
+function hashPassword(p: string, salt = '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8') {
+    return crypto.createHash('sha256').update(p + salt).digest();
+}
+
 function splitBuffer(buffer: Buffer, split: Buffer | string) {
     let search = -1, lines = [];
 
@@ -243,8 +250,4 @@ function formatPath(p: string, max: number = 30) {
         p = p.slice(0, Math.ceil(n)) + '...' + p.slice(- Math.floor(n));
     }
     return p;
-}
-
-function hashPassword(p: string, salt = '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8') {
-    return crypto.createHash('sha256').update(p + salt).digest();
 }
