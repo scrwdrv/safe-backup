@@ -21,7 +21,7 @@ const cpc = new CPC(),
     log = new loggerClient({
         system: 'worker',
         cluster: process.env.workerId,
-        debug: true
+        debug: false
     }),
     isWin = platform() === 'win32';
 
@@ -182,7 +182,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
             if (head) {
 
-                log.info(`Previous backup found, comparing modified time...`);
+                log.info(`Previous backup found, comparing modified time... [${formatPath(req.input)}]`);
 
                 const extract = new archive.Extract();
 
@@ -235,7 +235,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
             } else {
 
-                log.info(`Previous backup not found, making new one...`);
+                log.info(`Previous backup not found, making new one... [${formatPath(req.input)}]`);
 
                 key = crypto.randomBytes(32);
                 const randomName = crypto.randomBytes(64).toString();
@@ -282,7 +282,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
             if (head) {
 
-                log.info(`Previous backup found, comparing modifications...`);
+                log.info(`Previous backup found, comparing modifications... [${formatPath(req.input)}]`);
 
                 const passwordHash = await keytar.getPassword('safe-backup', req.account),
                     privateKeyDecipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(passwordHash), head.encryptedPrivateKey.slice(-12)).setAuthTag(head.encryptedPrivateKey.slice(-28, -12)),
@@ -457,7 +457,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
             } else {
 
-                log.info(`Previous backup not found, making new one...`);
+                log.info(`Previous backup not found, making new one... [${formatPath(req.input)}]`);
 
                 key = crypto.randomBytes(32);
 
@@ -508,7 +508,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                                     })();
                                 });
 
-                                mods.file[0]++;
+                                mods.directory[0]++;
                             }
                             else if (stats.isFile())
                                 fs.createReadStream(path)
@@ -518,7 +518,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                                         size: stats.size,
                                         mtime: Math.floor(stats.mtimeMs),
                                         type: 'file'
-                                    }, cb)), mods.directory[0]++;
+                                    }, cb)), mods.file[0]++;
                             else cb(null)
                         });
                     }

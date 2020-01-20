@@ -54,7 +54,7 @@ export class Extract {
 
                 if (previousBuffer.length >= indexHeader.nameLength) {
 
-                    const iHeader = indexHeader,
+                    let iHeader = indexHeader,
                         nameLength = iHeader.nameLength,
                         name = previousBuffer.slice(0, nameLength).toString();
 
@@ -90,7 +90,6 @@ export class Extract {
                     if (currentStream) currentStream.push(null);
                     else exec();
 
-
                 } else next();
 
             } else {
@@ -113,10 +112,10 @@ export class Extract {
 
                     })();
 
-
                     if (indexOfLastComma !== false) {
 
                         indexHeader = parseIndex(previousBuffer.slice(bytesLeft, indexOfLastComma));
+
                         if (currentStream && bytesLeft)
                             currentStream.push(previousBuffer.slice(0, bytesLeft));
 
@@ -153,6 +152,7 @@ export class Extract {
                 arr.push(c.slice(index, i === -1 ? undefined : i).toString())
                 index = i + 1;
             }
+
             switch (arr[0]) {
                 case '0':
                     type = 'file';
@@ -161,7 +161,7 @@ export class Extract {
                     type = 'directory';
                     break;
                 default:
-                    throw new Error(`Unknown type`)
+                    throw new Error(`Unknown type`);
             }
 
             let header = {
@@ -215,6 +215,6 @@ export class Pack {
         const mtime = header.mtime.toString(),
             type = header.type === 'file' ? 0 : 1;
 
-        this.output.push(Buffer.from(type + ',' + mtime + ',' + header.name.length.toString() + ',' + header.size + ',' + header.name));
+        this.output.push(Buffer.from(type + ',' + mtime + ',' + Buffer.byteLength(header.name).toString() + ',' + header.size + ',' + header.name));
     }
 }
