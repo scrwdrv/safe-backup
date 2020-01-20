@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import * as dir from 'recurdir';
 import * as PATH from 'path';
 import * as fs from 'fs';
+import * as keytar from 'keytar';
 
 process.on('SIGINT', () => exit());
 
@@ -25,8 +26,9 @@ declare global {
     interface BackupOptions {
         input: string;
         output: string[];
+        account: string;
         publicKey: string;
-        privateKey: string;
+        encryptedPrivateKey: string;
         ignore: string[];
     }
 
@@ -90,13 +92,11 @@ Options:
 let config: Config = {} as any,
     workers: cpcClusterWorker[] = [],
     running: number[] = [],
-    modified: { [input: string]: number } = {},
-    keys: {
-        public: string;
-        private: string;
-    } = {
-        public: null,
-        private: null
+    modified: { [input: string]: boolean } = {},
+    keys = {
+        account: '',
+        public: '',
+        encryptedPrivate: ''
     },
     exitState = 0;
 
@@ -117,15 +117,21 @@ let config: Config = {} as any,
 
         for (let i = config.input.length; i--;)
             promises.push(
-                backup({ input: config.input[i], output: config.output, publicKey: keys.public, privateKey: keys.private, ignore: config.ignore || [] })
-                    .then(() => {
-                        if (config.watch) return fs.stat(config.input[i], (err, stats) => {
-                            if (err) return log.debug(err),
-                                log.error(`Error occurred while accessing [${formatPath(config.input[i])}]`);
-                            backupDaemon(config.input[i]);
-                            watchMod(config.input[i], stats.isFile());
-                        });
-                    })
+                backup({
+                    input: config.input[i],
+                    output: config.output,
+                    account: keys.account,
+                    publicKey: keys.public,
+                    encryptedPrivateKey: keys.encryptedPrivate,
+                    ignore: config.ignore || []
+                }).then(() => {
+                    if (config.watch) return fs.stat(config.input[i], (err, stats) => {
+                        if (err) return log.debug(err),
+                            log.error(`Error occurred while accessing [${formatPath(config.input[i])}]`);
+                        backupDaemon(config.input[i]);
+                        watchMod(config.input[i], stats.isFile());
+                    });
+                })
             )
 
         await Promise.all(promises);
@@ -274,7 +280,7 @@ function parseParams() {
                             input: args.decrypt,
                             passwordHash: passwordHash
                         }, (err) => {
-                            if (err) log.debug(err), log.error(`Error occurred while decrypting [${formatPath(args.decrypt)}]`);
+                            if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(args.decrypt)}]`);
                             else {
                                 const decrypt = PATH.parse(args.decrypt);
                                 log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(args.decrypt)}]`);
@@ -308,8 +314,9 @@ function parseParams() {
                     case 'reset-key':
                         if (await prompt.questions.getYn(`Are you sure you wanna reset your key [Y/N]?`))
                             fs.unlink(PATH.join(appDataPath, 'key.safe'), (err) => {
-                                if (err.code === 'ENOENT') console.log('There is no key');
-                                else if (err) log.debug(err), console.log('Failed to delete key.safe');
+                                if (err)
+                                    if (err.code === 'ENOENT') console.log('There is no key');
+                                    else log.debug(err), console.log('Failed to delete key.safe');
                                 else console.log('key deleted');
                                 reject();
                             });
@@ -330,11 +337,11 @@ function parseParams() {
                         });
                         break;
                     case 'import-key':
-                        fs.readFile(args['import-key'], 'utf8', (err, data) => {
+                        fs.readFile(args['import-key'], (err, data) => {
                             if (err) return log.debug(err), console.log(`Key pair not at ${PATH.resolve(args['import-key'])}`), reject();
                             try {
-                                const key = JSON.parse(data);
-                                if (!key.public || !key.private) throw null;
+                                keys = decryptSafe(data);
+                                if (!keys.public || !keys.encryptedPrivate || !keys.account) throw null;
                                 fs.writeFile(PATH.join(appDataPath, 'key.safe'), data, (err) => {
                                     if (err) log.debug(err), console.log('Failed to import key');
                                     else console.log(`Key imported`);
@@ -396,15 +403,31 @@ function handleConfig(c?: Config) {
 
 function getPassword() {
     return new Promise<void>(async (resolve, reject) => {
-        fs.readFile(PATH.join(appDataPath, 'key.safe'), 'utf8', (err, data) => {
+
+        fs.readFile(PATH.join(appDataPath, 'key.safe'), (err, data) => {
             if (err) return log.warn(`Key pair not found, let's make one!`), setPassword();
-            keys = JSON.parse(data);
-            if (!keys.public || !keys.private) return reject(`Invalid key file`)
+
+            try {
+                keys = decryptSafe(data);
+                if (!keys.public || !keys.encryptedPrivate || !keys.account) throw null;
+            } catch (err) {
+                return reject(`Invalid key file`)
+            }
+
             resolve();
         });
+
         async function setPassword() {
 
-            const hash = hashPassword(await prompt.questions.setPassword()).toString('hex');
+            const hash = hashPassword(await prompt.questions.setPassword()).toString('hex'),
+                account = crypto.randomBytes(32).toString('hex');
+
+            try {
+                await keytar.setPassword('safe-backup', account, hash);
+            } catch (err) {
+                log.warn(`Failed to save password to system keychain, is libsecret correctly installed?`);
+                return reject(err);
+            }
 
             log.info(`Generating new RSA-4096 key pair...`);
 
@@ -424,18 +447,19 @@ function getPassword() {
                 if (err) return reject(err);
 
                 const iv = crypto.randomBytes(12),
-                    cipher = crypto.createCipheriv('aes-256-gcm', hashPassword(hash, '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8'), iv);
+                    cipher = crypto.createCipheriv('aes-256-gcm', hashPassword(hash, '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8'), iv),
+                    safeCipher = crypto.createCipheriv('aes-256-ctr', 'c738b5fa19d2ddea7180a714c1e68079', 'b623a9863a81a793');
 
-                privateKey = Buffer.concat([cipher.update(privateKey), cipher.final(), cipher.getAuthTag(), iv]).toString('hex');
-
+                keys.account = account;
                 keys.public = publicKey;
-                keys.private = privateKey;
+                keys.encryptedPrivate = Buffer.concat([cipher.update(privateKey), cipher.final(), cipher.getAuthTag(), iv]).toString('hex');
 
-                fs.writeFile(PATH.join(appDataPath, 'key.safe'), JSON.stringify(keys), (err) => {
-                    if (err) return reject(err);
-                    log.info(`Public & private key generated at ${PATH.join(appDataPath, 'key.safe')}`);
-                    resolve();
-                });
+                fs.writeFile(PATH.join(appDataPath, 'key.safe'),
+                    Buffer.concat([safeCipher.update(JSON.stringify(keys)), safeCipher.final()]), (err) => {
+                        if (err) return reject(err);
+                        log.info(`Public & private key generated at ${PATH.join(appDataPath, 'key.safe')}`);
+                        resolve();
+                    });
             });
         }
     });
@@ -456,16 +480,14 @@ function forkWorker(id: string) {
     return worker;
 }
 
-function backup(options: BackupOptions, mod?: number) {
+function backup(options: BackupOptions) {
     return new Promise<void>((resolve) => {
         const worker = getWokrer(),
             t = Date.now();
-
         running.push(worker.id);
-        worker.sendJob('backup', options, (err, bytes) => {
-            if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`);
-            else if (mod) log.info(`Synced ${mod} mod${mod > 1 ? 's' : ''}, duration: ${formatSec(Date.now() - t)}s [${formatBytes(bytes)}][${formatPath(options.input)}]`);
-            else log.info(`Synced, duration: ${formatSec(Date.now() - t)}s [${formatBytes(bytes)}][${formatPath(options.input)}]`)
+        worker.sendJob('backup', options, (err, bytes, mods) => {
+            if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`), log.warn(`If this happens continuously, try to delete old backup file`);
+            else log.info(`Synced [${formatSec(Date.now() - t)}s][${formatBytes(bytes)}][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(options.input)}]`);
 
             const index = running.indexOf(worker.id);
             if (index > -1) running.splice(index, 1);
@@ -486,15 +508,15 @@ function backupDaemon(input: string) {
         backup({
             input: input,
             output: config.output,
+            account: keys.account,
             publicKey: keys.public,
-            privateKey: keys.private,
+            encryptedPrivateKey: keys.encryptedPrivate,
             ignore: config.ignore || []
-        }, modified[input]).then(() =>
+        }).then(() =>
             setTimeout(backupDaemon, config.watch * 1000, input));
         delete modified[input];
     } else setTimeout(backupDaemon, config.watch * 1000, input);
 }
-
 
 function watchMod(path: string, isFile: boolean, retry = 0) {
     if (retry > 5) {
@@ -509,9 +531,8 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
                 for (let i = regs.length; i--;)
                     if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
             }
-
-            modified[path] ? modified[path]++ : modified[path] = 1;
-            log.info(`File modified [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
+            modified[path] = true;
+            log.info(`[${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
         }).on('error', (err) => {
             log.debug(err);
             log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
@@ -572,6 +593,11 @@ async function exit(retry: number = 0) {
 
     exitState = 2;
     logServer.save().then(process.exit).catch(() => exit(retry + 1));
+}
+
+function decryptSafe(data: Buffer) {
+    const safeDecipher = crypto.createCipheriv('aes-256-ctr', 'c738b5fa19d2ddea7180a714c1e68079', 'b623a9863a81a793');
+    return JSON.parse(Buffer.concat([safeDecipher.update(data), safeDecipher.final()]).toString());
 }
 
 function hashPassword(p: string, salt = '2ec8df9c3da9a2fe0b395cbc11c2dd54bc6a8dfec5ba2b7a96562aed17caffa9') {

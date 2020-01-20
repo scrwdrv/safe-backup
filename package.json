@@ -38,16 +38,16 @@
   "dependencies": {
     "appdata-path": "^1.0.0",
     "cli-params": "^1.2.1",
-    "cluster-ipc-logger": "^1.1.6",
+    "cluster-ipc-logger": "^1.1.7",
+    "fast-unique-id": "^1.1.1",
+    "keytar": "^5.0.0",
     "physical-cores": "^1.0.2",
-    "recurdir": "^1.0.5",
+    "recurdir": "^1.0.9",
     "simple-regex-toolkit": "^1.0.3",
-    "tar-fs": "github:cloudron-io/tar-fs#ignore_file_removed",
     "worker-communication": "^1.0.4"
   },
   "devDependencies": {
-    "@types/node": "^13.1.7",
-    "@types/tar-fs": "^1.16.2",
+    "@types/node": "^13.1.8",
     "nexe": "^3.3.2"
   }
 }

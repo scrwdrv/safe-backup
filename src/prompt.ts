@@ -1,7 +1,9 @@
 import * as readline from 'readline';
 
 export default class Prompt {
+
     private rl: readline.Interface;
+
     private getRl() {
         this.rl = readline.createInterface({
             input: process.stdin,
@@ -10,7 +12,7 @@ export default class Prompt {
         })
     }
 
-    ask(question: string) {
+    private ask(question: string) {
         return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
             this.rl.question('\n' + question + '\n \x1b[36m\x1b[1m>\x1b[0m ', (val) => {
@@ -20,7 +22,7 @@ export default class Prompt {
         });
     }
 
-    end() {
+    private end() {
         this.rl.close();
         this.rl = null;
     }

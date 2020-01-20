@@ -3,243 +3,563 @@ import { loggerClient } from 'cluster-ipc-logger';
 import { Writable } from 'stream';
 import * as fs from 'fs';
 import * as PATH from 'path';
-import * as tar from 'tar-fs';
 import * as crypto from 'crypto';
 import * as regex from 'simple-regex-toolkit';
+import { platform } from 'os';
+import * as archive from './archive';
+import * as keytar from 'keytar';
 
 process.on('SIGINT', () => { });
 
-type Prefix = {
-    isFile: boolean;
-    iv: Buffer;
-    encryptedPassword: Buffer;
+type encryptHead = {
     encryptedPrivateKey: Buffer;
-    length: number;
-};
-
-type Head = {
-    lengthMap: number[];
-    bytesLength: number;
-    prefix: Prefix;
-    suffix: Buffer;
-};
+    encryptedKey: Buffer;
+    isFile?: boolean;
+}
 
 const cpc = new CPC(),
     log = new loggerClient({
         system: 'worker',
         cluster: process.env.workerId,
-        debug: false
-    });
+        debug: true
+    }),
+    isWin = platform() === 'win32';
 
 cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
     log.info(`Decrypting & extracting file... [${formatPath(req.input)}]`);
 
+    let head: encryptHead,
+        mkedDir = {};
+
     try {
 
-        const head = await readHead(req.input),
-            decipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(req.passwordHash), head.prefix.encryptedPrivateKey.slice(-12)).setAuthTag(head.prefix.encryptedPrivateKey.slice(-28, -12)),
+        head = await checkHead(req.input);
+
+        const privateKeyDecipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(req.passwordHash), head.encryptedPrivateKey.slice(-12)).setAuthTag(head.encryptedPrivateKey.slice(-28, -12)),
             privateKey = crypto.createPrivateKey({
-                key: Buffer.concat([decipher.update(head.prefix.encryptedPrivateKey.slice(0, -28)), decipher.final()]),
+                key: Buffer.concat([privateKeyDecipher.update(head.encryptedPrivateKey.slice(0, -28)), privateKeyDecipher.final()]),
                 format: 'pem',
                 passphrase: req.passwordHash
             }),
-            key = crypto.privateDecrypt(privateKey, head.prefix.encryptedPassword),
+            key = crypto.privateDecrypt(privateKey, head.encryptedKey),
             input = PATH.parse(req.input),
             output = PATH.join(input.dir, input.name),
-            outputStream = head.prefix.isFile ? fs.createWriteStream(output) : tar.extract(output);
+            extract = new archive.Extract();
 
-        outputStream.on('finish', res);
+        extract.onEntry((header, stream, next) => {
 
-        fs.createReadStream(req.input, { start: head.prefix.length, end: head.bytesLength - 16 - 1 })
-            .pipe(crypto.createDecipheriv('aes-256-gcm', key, head.prefix.iv).setAuthTag(head.suffix))
-            .pipe(outputStream);
+            if (header.type === 'file')
+                if (head.isFile)
+                    stream
+                        .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
+                        .pipe(fs.createWriteStream(output, { mode: 0o644 })).on('finish', next)
+
+                else {
+                    const index = header.name.lastIndexOf('/');
+                    mkdir(header.name.slice(0, index === -1 ? 0 : index), (err) => {
+                        if (err) return next(err);
+                        stream
+                            .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
+                            .pipe(fs.createWriteStream(PATH.join(output, header.name), { mode: 0o644 })).on('finish', next)
+                    });
+                }
+            else (function dirHandler() {
+                let pending = true,
+                    streamDropped = false;
+
+                stream.skip(() => {
+                    if (!pending) return next();
+                    streamDropped = true;
+                });
+
+                mkdir(header.name, (err) => {
+                    if (err) return next(err);
+                    if (streamDropped) return next()
+                    pending = false
+                });
+            })();
+
+
+            function mkdir(dirname: string, cb: (err?: NodeJS.ErrnoException) => void) {
+                if (mkedDir[dirname]) return cb();
+                fs.mkdir(PATH.join(output, dirname), { recursive: true, mode: 0o755 }, (err) => {
+                    if (err) return cb(err);
+                    const arr = dirname.split('/');
+                    let p = ''
+                    for (let i = 0, l = arr.length; i < l; i++) {
+                        p += '/' + arr[i]
+                        mkedDir[p] = true;
+                    }
+                    cb();
+                });
+            }
+        })
+
+        fs.createReadStream(req.input, { start: 3867 })
+            .pipe(extract.input).on('finish', res);
 
     } catch (err) {
         log.debug(err);
         res(err);
     }
 
+    function checkHead(path: string) {
+        return new Promise<encryptHead>(async (resolve, reject) => {
+            fs.open(path, 'r', (err, fd) => {
+                if (err) return reject(err);
+                fs.read(fd, Buffer.alloc(3867), 0, 3867, 0, (err, bytesLength, buffer) => {
+                    if (err) return reject(err);
+                    const fileType = buffer.slice(0, 1).toString('utf8');
+                    let isFile = null;
+                    if (fileType === 'F') isFile = true;
+                    else if (fileType === 'D') isFile = false;
+                    else return reject('Unknown type');
+
+                    fs.close(fd, (err) => {
+                        if (err) return reject(err);
+                        resolve({
+                            encryptedPrivateKey: buffer.slice(1, 3355),
+                            encryptedKey: buffer.slice(3355),
+                            isFile: isFile
+                        });
+                    });
+                });
+            });
+        });
+    }
+
+
 }).onMaster('backup', async (req: BackupOptions, res) => {
 
-    const isFile = await new Promise<boolean>((resolve: (isFile: boolean) => void) => {
+    let bytesLength = 0,
+        key: Buffer,
+        head: encryptHead,
+        previousBackupPath: string,
+        mods = {
+            file: [0, 0],
+            directory: [0, 0]
+        };
+
+    const inputStats = await new Promise<fs.Stats>((resolve) =>
         fs.stat(req.input, (err, stats) => {
             if (err) return res(err);
-            resolve(stats.isFile());
-        });
-    });
+            resolve(stats);
+        })),
+        isFile = inputStats.isFile(),
+        l = req.output.length,
+        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
+        outputs = req.output.map(p => { return fs.createWriteStream(PATH.join(p, fileName + '.temp')); }),
+        writeStream = new Writable({
+            write(chunk, encoding, next) {
+                bytesLength += chunk.length;
+                for (let i = l; i--;) outputs[i].write(chunk);
+                next();
+            }
+        }).on('finish', () => Promise.all(outputs.map((output, i) => {
+            return new Promise<void>((resolve, reject) =>
+                output.end(() =>
+                    fs.rename(PATH.join(req.output[i], fileName + '.temp'), PATH.join(req.output[i], fileName), (err) => {
+                        if (err) return reject(err)
+                        resolve();
+                    })
+                )
+            )
+        })).then(() => res(null, bytesLength, mods)).catch(res)),
+        pack = new archive.Pack();
 
     log.info(`Syncing & encrypting ${isFile ? 'file' : 'folder'}... [${formatPath(req.input)}]`);
 
     try {
 
-        const l = req.output.length,
-            name = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
-            key = crypto.randomBytes(32),
-            iv = crypto.randomBytes(12),
-            cipher = crypto.createCipheriv('aes-256-gcm', key, iv),
-            buffers = [Buffer.from(isFile ? 'F' : 'D'), iv, crypto.publicEncrypt(req.publicKey, key), Buffer.from(req.privateKey, 'hex')],
-            writeStream = new Writable({
-                write(chunk, encoding, next) {
-                    bytesLength += chunk.length;
-                    for (let i = l; i--;) outputs[i].write(chunk);
-                    next();
-                }
-            }).on('finish', () => {
-                const authTag = cipher.getAuthTag();
-                let promises = [];
+        if (isFile) {
 
-                bytesLength += authTag.length;
+            for (let i = 0; i < l; i++)  try {
+                const path = PATH.join(req.output[i], fileName);
+                head = await checkHead(path);
+                previousBackupPath = path;
+            } catch (err) { }
 
-                for (let i = l; i--;)
-                    promises.push(new Promise<void>((resolve, reject) =>
-                        outputs[i].end(authTag, () =>
-                            fs.rename(PATH.join(req.output[i], name + '.temp'), PATH.join(req.output[i], name), (err) => {
-                                if (err) return reject(err)
-                                resolve()
-                            })
-                        )
-                    ));
+            if (head) {
 
-                Promise.all(promises).then(() => res(null, bytesLength)).catch(res);
-            }),
-            regs = req.ignore.map(str => {
+                log.info(`Previous backup found, comparing modified time...`);
+
+                const extract = new archive.Extract();
+
+                key = crypto.randomBytes(32);
+
+                extract.onEntry((header, stream, next) => {
+
+                    const mtime = Math.floor(inputStats.mtimeMs);
+
+                    if (mtime > header.mtime) fileHandler(), mods.file[0]++;
+                    else stream.pipe(pack.entry(header, next));
+
+                    function fileHandler() {
+                        let pending = true,
+                            streamDropped = false;
+
+                        const randomName = crypto.randomBytes(64).toString();
+
+                        stream.skip(() => {
+                            if (!pending) return next();
+                            streamDropped = true;
+                        })
+
+                        fs.createReadStream(req.input)
+                            .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(randomName)))
+                            .pipe(pack.entry({
+                                name: randomName,
+                                size: inputStats.size,
+                                mtime: mtime,
+                                type: 'file'
+                            }, () => {
+                                if (streamDropped) return next()
+                                pending = false
+                            }));
+                    }
+                })
+
+                writeStream.write(Buffer.concat([
+                    Buffer.from('F'),
+                    Buffer.from(req.encryptedPrivateKey, 'hex'),
+                    crypto.publicEncrypt(req.publicKey, key)
+                ]), (err) => {
+                    if (err) return res(err);
+
+                    pack.output.pipe(writeStream);
+
+                    fs.createReadStream(previousBackupPath, { start: 3867 })
+                        .pipe(extract.input).on('finish', () => pack.finalize());
+                });
+
+            } else {
+
+                log.info(`Previous backup not found, making new one...`);
+
+                key = crypto.randomBytes(32);
+                const randomName = crypto.randomBytes(64).toString();
+
+                writeStream.write(Buffer.concat([
+                    Buffer.from('F'),
+                    Buffer.from(req.encryptedPrivateKey, 'hex'),
+                    crypto.publicEncrypt(req.publicKey, key)
+                ]), (err) => {
+                    if (err) return res(err);
+
+                    fs.createReadStream(req.input)
+                        .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(randomName)))
+                        .pipe(pack.entry({
+                            name: randomName,
+                            size: inputStats.size,
+                            mtime: Math.floor(inputStats.mtimeMs),
+                            type: 'file'
+                        }, (err) => {
+                            if (err) return res(err);
+                            pack.finalize();
+                        }));
+
+                    mods.file[0]++;
+
+                    pack.output.pipe(writeStream);
+                });
+            }
+
+        } else {
+
+            for (let i = 0; i < l; i++)  try {
+                const path = PATH.join(req.output[i], fileName);
+                head = await checkHead(path);
+                previousBackupPath = path;
+                if (head.encryptedPrivateKey.toString('hex') !== req.encryptedPrivateKey)
+                    log.warn(`Private key is different from previous backup [${formatPath(path)}]`), head = null;
+                else break;
+            } catch (err) { }
+
+            const regs = req.ignore.map(str => {
                 return regex.from(str)
-            });
+            }), prefixLength = req.input.length;
 
-        let outputs: fs.WriteStream[] = [],
-            bytesLength = 0;
+            if (head) {
 
-        for (let i = l; i--;)
-            outputs.push(fs.createWriteStream(PATH.join(req.output[i], name + '.temp')));
+                log.info(`Previous backup found, comparing modifications...`);
 
-        writeStream.write(Buffer.concat([
-            Buffer.from('[' + buffers.map((b) => { return b.length }).join(',') + ']', 'utf8'),
-            ...buffers
-        ]), err => {
-            if (err) return res(err), writeStream.destroy();
-            if (isFile) fs.createReadStream(req.input).pipe(cipher).pipe(writeStream);
-            else tar.pack(req.input, {
-                ignore: (file) => {
-                    const arr = file.split(PATH.sep);
-                    for (let i = regs.length; i--;)
-                        if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return true;
-                    return false;
-                },
-                strict: false,
-                //@ts-ignore, see: https://github.com/cloudron-io/tar-fs/commit/c941c1e364f5345686f92656238a1f8ce67232f3
-                ignoreFileRemoved: (path: string, err: NodeJS.ErrnoException) => {
-                    if (err.code === 'ENOENT') return true;
-                    return false;
+                const passwordHash = await keytar.getPassword('safe-backup', req.account),
+                    privateKeyDecipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(passwordHash), head.encryptedPrivateKey.slice(-12)).setAuthTag(head.encryptedPrivateKey.slice(-28, -12)),
+                    privateKey = crypto.createPrivateKey({
+                        key: Buffer.concat([privateKeyDecipher.update(head.encryptedPrivateKey.slice(0, -28)), privateKeyDecipher.final()]),
+                        format: 'pem',
+                        passphrase: passwordHash
+                    }),
+                    extract = new archive.Extract();
+
+                key = crypto.privateDecrypt(privateKey, head.encryptedKey);
+
+                let entries: { [name: string]: Header } = {};
+
+                extract.onEntry((header, stream, next) => {
+                    let path = PATH.join(req.input, header.name);
+
+                    getHeader(path, (err, stats) => {
+
+                        if (err)
+                            if (err.code === 'ENOENT')
+                                return stream.skip(next), mods[header.type][1]++;
+                            else return next(err);
+                        else if (!stats) return stream.skip(next), mods[header.type][1]++;
+
+                        const n = stats.name.split('/');
+
+                        for (let i = regs.length; i--;)
+                            if (regs[i].test(stats.name) || n.indexOfRegex(regs[i]) > -1)
+                                return entries[header.type === 'directory' ? path.slice(0, -1) : path] = {
+                                    name: null,
+                                    size: null,
+                                    type: 'file',
+                                    mtime: null
+                                }, stream.skip(next);
+
+
+                        if (header.type !== stats.type) {
+                            switch (stats.type) {
+                                case 'file':
+                                    fileHandler();
+                                    mods.directory[1]++;
+                                    mods.file[0]++;
+                                    break;
+                                case 'directory':
+                                    pack.writeHeader(stats);
+                                    stream.skip(next)
+                                    mods.directory[0]++;
+                                    mods.file[1]++;
+                                    break;
+                            }
+                        } else if (stats.mtime > header.mtime) {
+                            switch (stats.type) {
+                                case 'file':
+                                    fileHandler();
+                                    mods.file[0]++;
+                                    break;
+                                case 'directory':
+                                    pack.writeHeader(stats);
+                                    stream.skip(next)
+                                    mods.directory[0]++;
+                                    break;
+                            }
+                        } else stream.pipe(pack.entry(header, next));
+
+                        entries[header.type === 'directory' ? path.slice(0, -1) : path] = stats;
+
+                        function fileHandler() {
+                            let pending = true,
+                                streamDropped = false;
+
+                            stream.skip(() => {
+                                if (!pending) return next();
+                                streamDropped = true;
+                            });
+
+                            fs.createReadStream(path)
+                                .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(stats.name)))
+                                .pipe(pack.entry(stats, () => {
+                                    if (streamDropped) return next()
+                                    pending = false
+                                }));
+                        }
+
+                    });
+                });
+
+                writeStream.write(Buffer.concat([
+                    Buffer.from('D'),
+                    head.encryptedPrivateKey,
+                    head.encryptedKey
+                ]), (err) => {
+                    if (err) return res(err);
+
+                    pack.output.pipe(writeStream);
+
+                    fs.createReadStream(previousBackupPath, { start: 3867 })
+                        .pipe(extract.input).on('finish', () =>
+                            updateHeader(req.input, (err) => {
+                                if (err) return res(err);
+                                pack.finalize();
+                            })
+                        );
+                });
+
+                function updateHeader(path: string, cb: (err: NodeJS.ErrnoException) => void) {
+
+                    if (entries[path])
+                        if (entries[path].type === 'directory')
+                            recursiveDir();
+                        else cb(null);
+                    else getHeader(path, (err, stats) => {
+                        if (err) return cb(err);
+
+                        const n = stats.name.split('/');
+
+                        for (let i = regs.length; i--;)
+                            if (regs[i].test(stats.name) || n.indexOfRegex(regs[i]) > -1)
+                                return cb(null);
+
+                        if (stats.type === 'directory') {
+                            pack.writeHeader(stats);
+                            recursiveDir();
+                            mods.directory[0]++;
+                        } else fs.createReadStream(path)
+                            .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(stats.name)))
+                            .pipe(pack.entry(stats, cb)), mods.file[0]++;;
+
+                    });
+
+                    function recursiveDir() {
+                        fs.readdir(path, (err, files) => {
+                            if (err) return cb(err);
+
+                            const l = files.length;
+
+                            (function next(i = 0) {
+                                if (i === l) return cb(null);
+                                updateHeader(PATH.join(path, files[i]), (err) => {
+                                    if (err) return cb(err);
+                                    next(i + 1)
+                                })
+                            })();
+                        });
+                    }
                 }
-            }).pipe(cipher).pipe(writeStream);
-        });
+
+                function getHeader(path: string, cb: (err: NodeJS.ErrnoException, stats?: Header) => void) {
+
+                    const name = normalizePath(path.slice(prefixLength));
+
+                    fs.stat(path, (err, stats) => {
+                        if (err) return cb(err);
+
+                        if (stats.isDirectory()) {
+                            cb(null, {
+                                name: name + '/',
+                                size: 0,
+                                mtime: Math.floor(stats.mtimeMs),
+                                type: 'directory'
+                            })
+                        } else if (stats.isFile())
+                            cb(null, {
+                                name: name,
+                                size: stats.size,
+                                mtime: Math.floor(stats.mtimeMs),
+                                type: 'file'
+                            });
+                        else cb(null, null)
+                    });
+                }
+
+            } else {
+
+                log.info(`Previous backup not found, making new one...`);
+
+                key = crypto.randomBytes(32);
+
+                writeStream.write(Buffer.concat([
+                    Buffer.from('D'),
+                    Buffer.from(req.encryptedPrivateKey, 'hex'),
+                    crypto.publicEncrypt(req.publicKey, key)
+                ]), (err) => {
+                    if (err) return res(err);
+
+                    pack.output.pipe(writeStream);
+
+                    getEntry(req.input, (err) => {
+                        if (err) return res(err);
+                        pack.finalize();
+                    });
+
+
+                    function getEntry(path: string, cb: (err: NodeJS.ErrnoException) => void) {
+
+                        const name = normalizePath(path.slice(prefixLength)),
+                            n = name.split('/');
+
+                        for (let i = regs.length; i--;)
+                            if (regs[i].test(name) || n.indexOfRegex(regs[i]) > -1) return cb(null);
+
+                        fs.stat(path, (err, stats) => {
+                            if (err) return cb(err);
+
+                            if (stats.isDirectory()) {
+                                pack.writeHeader({
+                                    name: name + '/',
+                                    size: 0,
+                                    mtime: Math.floor(stats.mtimeMs),
+                                    type: 'directory'
+                                });
+                                fs.readdir(path, (err, files) => {
+                                    if (err) return cb(err);
+
+                                    const l = files.length;
+
+                                    (function next(i = 0) {
+                                        if (i === l) return cb(null);
+                                        getEntry(PATH.join(path, files[i]), (err) => {
+                                            if (err) return cb(err);
+                                            next(i + 1)
+                                        })
+                                    })();
+                                });
+
+                                mods.file[0]++;
+                            }
+                            else if (stats.isFile())
+                                fs.createReadStream(path)
+                                    .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(name)))
+                                    .pipe(pack.entry({
+                                        name: name,
+                                        size: stats.size,
+                                        mtime: Math.floor(stats.mtimeMs),
+                                        type: 'file'
+                                    }, cb)), mods.directory[0]++;
+                            else cb(null)
+                        });
+                    }
+                });
+            }
+        }
+
     } catch (err) {
         log.debug(err);
         res(err);
     }
 
-});
-
-function readHead(path: string) {
-    return new Promise<Head>(async (resolve, reject) => {
-
-        let head: Head = {} as any;
-
-        try {
-
-            head.lengthMap = await new Promise<number[]>((resolve, reject) => {
-
-                let buffer: Buffer,
-                    index = -1;
-
-                const lookingFor = Buffer.from(']'),
-                    readStream = fs.createReadStream(path, { highWaterMark: 64 }).on('data', data => {
-                        if (!buffer) buffer = data;
-                        else buffer = Buffer.concat([buffer, data]);
-                        index = buffer.indexOf(lookingFor);
-                        if (index > -1) readStream.close();
-                    }).on('close', () => {
-
-                        if (index === -1) return reject(`Prefix not found`);
-
-                        const lengthMap = splitBuffer(buffer.slice(1, index), ',').map(b => {
-                            return parseInt(b);
-                        });
-
-                        if (lengthMap.length !== 4) return reject(`Invalid prefix`);
-                        resolve(lengthMap);
-                    })
-            });
-
-            head.bytesLength = await new Promise<number>((resolve, reject) => fs.stat(path, (err, stats) => {
+    function checkHead(path: string) {
+        return new Promise<encryptHead>(async (resolve, reject) => {
+            fs.open(path, 'r', (err, fd) => {
                 if (err) return reject(err);
-                resolve(stats.size);
-            }));
-
-            head.prefix = await new Promise<Prefix>((resolve, reject) => {
-                fs.open(path, 'r', (err, fd) => {
+                fs.read(fd, Buffer.alloc(3867), 0, 3867, 0, (err, bytesLength, buffer) => {
                     if (err) return reject(err);
+                    const fileType = buffer.slice(0, 1).toString('utf8');
+                    if (isFile && fileType !== 'F') return reject(`Expecting file`);
+                    else if (!isFile && fileType !== 'D') return reject(`Expecting directory`);
 
-                    const indexMapLength = head.lengthMap.join(',').length + 2,
-                        prefixLength = head.lengthMap.reduce((a, b) => a + b);
-
-                    fs.read(fd, Buffer.alloc(prefixLength), 0, prefixLength, indexMapLength, (err, bytesLength, buffer) => {
+                    fs.close(fd, (err) => {
                         if (err) return reject(err);
-
-                        let prefix: Prefix = {
-                            isFile: null,
-                            iv: buffer.slice(head.lengthMap[0], head.lengthMap[0] + head.lengthMap[1]),
-                            encryptedPassword: buffer.slice(head.lengthMap[0] + head.lengthMap[1], head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2]),
-                            encryptedPrivateKey: buffer.slice(head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2], head.lengthMap[0] + head.lengthMap[1] + head.lengthMap[2] + head.lengthMap[3]),
-                            length: indexMapLength + prefixLength
-                        }
-
-                        const type = buffer.slice(0, head.lengthMap[0]).toString('utf8');
-
-                        switch (type) {
-                            case 'D':
-                                prefix.isFile = false;
-                                break;
-                            case 'F':
-                                prefix.isFile = true;
-                                break;
-                            default:
-                                return reject('Unknown type');
-                        }
-
-                        fs.read(fd, Buffer.alloc(16), 0, 16, head.bytesLength - 16, (err, bytesLength, buffer) => {
-                            if (err) return reject(err);
-                            head.suffix = buffer;
-                            resolve(prefix);
+                        resolve({
+                            encryptedPrivateKey: buffer.slice(1, 3355),
+                            encryptedKey: buffer.slice(3355)
                         });
                     });
                 });
             });
-
-        } catch (err) {
-            return reject(err)
-        }
-
-        resolve(head);
-
-    });
-}
+        });
+    }
+});
 
 function hashPassword(p: string, salt = '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8') {
     return crypto.createHash('sha256').update(p + salt).digest();
 }
 
-function splitBuffer(buffer: Buffer, split: Buffer | string) {
-    let search = -1, lines = [];
-
-    while ((search = buffer.indexOf(split)) > -1) {
-        lines.push(buffer.slice(0, search));
-        buffer = buffer.slice(search + split.length);
-    }
-
-    lines.push(buffer);
-    return lines;
+function hashMD5(s: string) {
+    return crypto.createHash('md5').update('67ea949a58f394d357de7f9b6b003403' + s + '1dfdffe2268ccf653daca275d4294de5').digest();
 }
 
 function formatPath(p: string, max: number = 30) {
@@ -249,4 +569,8 @@ function formatPath(p: string, max: number = 30) {
         p = p.slice(0, Math.ceil(n)) + '...' + p.slice(- Math.floor(n));
     }
     return p;
+}
+
+function normalizePath(p: string) {
+    return isWin ? p.replace(/\\/g, '/').replace(/^\/|\/$/g, '') : p.replace(/^\/|\/$/g, '');
 }
