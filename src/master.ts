@@ -52,6 +52,7 @@ const appDataPath = getAppDataPath('safe-backup'),
     }),
     helpText = `
 Usage:
+
     safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] 
                 --output <outputPath1> [outputPath2 [outputPath3 ...]] 
                 [--watch [interval]] [--ignore <regex> [regex [regex...]] 
@@ -69,6 +70,7 @@ Usage:
     safe-backup --import-key <path>
 
 Options:
+
     -i --input          Absolute path(s) of folder/file to backup, separate by space.
     -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
     -w --watch          Enable watch mode.
