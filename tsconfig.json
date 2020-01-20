@@ -4,6 +4,7 @@
         "module": "commonjs",
         "moduleResolution": "node",
         "alwaysStrict": true,
+        "declaration": true,
         "lib": [
             "esnext"
         ],
