@@ -519,6 +519,7 @@ function backupDaemon(input: string) {
 }
 
 function watchMod(path: string, isFile: boolean, retry = 0) {
+
     if (retry > 5) {
         log.warn(`Stopped monitoring [${formatPath(path)}], next check in 10 mins...`);
         return setTimeout(watchMod, 600000, path, isFile, 0);
@@ -532,7 +533,7 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
                     if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
             }
             modified[path] = true;
-            log.info(`[${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
+            log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
         }).on('error', (err) => {
             log.debug(err);
             log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
