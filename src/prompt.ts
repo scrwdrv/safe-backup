@@ -70,7 +70,7 @@ export default class Prompt {
         },
         getPassword: () => {
             return new Promise<string>(resolve =>
-                this.ask('Enter your password for encryption: ').then(resolve)
+                this.ask('Enter your password: ').then(resolve)
             );
         },
         getYn: (question: string) => {

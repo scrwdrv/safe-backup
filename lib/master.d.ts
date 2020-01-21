@@ -5,11 +5,12 @@ declare global {
         watch: number;
         ignore: string[];
         publicKey: string;
+        savePassword: boolean;
     }
     interface BackupOptions {
         input: string;
         output: string[];
-        account: string;
+        passwordHash?: string;
         publicKey: string;
         encryptedPrivateKey: string;
         ignore: string[];
@@ -17,6 +18,11 @@ declare global {
     interface DecryptOptions {
         input: string;
         passwordHash: string;
+    }
+    interface Keys {
+        public: string;
+        encryptedPrivate: string;
+        hash?: string;
     }
 }
 export {};

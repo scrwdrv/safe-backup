@@ -1,17 +1,16 @@
 import { loggerServer, loggerClient } from 'cluster-ipc-logger';
-import physicalCores from 'physical-cores';
 import updateCheck from 'startup-update-check';
-import CPC from 'worker-communication';
-import CLIParams from 'cli-params';
-import Prompt from './prompt';
 import * as regex from 'simple-regex-toolkit';
+import physicalCores from 'physical-cores';
 import getAppDataPath from 'appdata-path';
+import CPC from 'worker-communication';
 import * as cluster from 'cluster';
+import CLIParams from 'cli-params';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
+import Prompt from './prompt';
 import * as PATH from 'path';
 import * as fs from 'fs';
-import * as keytar from 'keytar';
 
 process.on('SIGINT', () => exit());
 
@@ -22,12 +21,13 @@ declare global {
         watch: number;
         ignore: string[];
         publicKey: string;
+        savePassword: boolean;
     }
 
     interface BackupOptions {
         input: string;
         output: string[];
-        account: string;
+        passwordHash?: string;
         publicKey: string;
         encryptedPrivateKey: string;
         ignore: string[];
@@ -36,6 +36,12 @@ declare global {
     interface DecryptOptions {
         input: string;
         passwordHash: string;
+    }
+
+    interface Keys {
+        public: string;
+        encryptedPrivate: string;
+        hash?: string
     }
 }
 
@@ -57,6 +63,7 @@ Usage:
     safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] 
                 --output <outputPath1> [outputPath2 [outputPath3 ...]] 
                 [--watch [interval]] [--ignore <regex> [regex [regex...]] 
+                [--save-password [true|false]]
 
     safe-backup --decrypt <backupPath> [--password <password>]
 
@@ -64,7 +71,9 @@ Usage:
     safe-backup --version
     safe-backup --config
     safe-backup --build-config
+    safe-backup --reset-config
     safe-backup --reset-key
+
     safe-backup --log
 
     safe-backup --export-key [path]
@@ -76,6 +85,9 @@ Options:
     -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rule with regex.  
+    -s --save-password  Save password to system. When backup folder, previous password will be reused,
+                        so unchanged files don't need to be re-encrypt (a lot more faster).
+                        This parameter set to true by default.
 
     -d --decrypt        Absolute path of encrypted file to decrypt.
     -p --password       Password for decryption (not recommended to use password in command line).
@@ -84,6 +96,7 @@ Options:
     -v --version        Show version.
     -c --config         Show current configuration.
     -b --build-config   Start building configurations.
+    --reset-config      Delete configuration file.
     --reset-key         Delete both public & private key, 
                         previously encrypted files can still decrypt by original password.
     -l --log            Show location of log files.
@@ -96,21 +109,12 @@ let config: Config = {} as any,
     workers: cpcClusterWorker[] = [],
     running: number[] = [],
     modified: { [input: string]: boolean } = {},
-    keys = {
-        account: '',
-        public: '',
-        encryptedPrivate: ''
-    },
+    keys: Keys = {} as any,
     exitState = 0;
 
 (async function init() {
 
     try {
-
-        const newerVersion = await updateCheck(PATH.join(__dirname, '../', 'package.json')).catch((err) => { });
-
-        if (newerVersion)
-            log.warn(`safe-backup v${newerVersion} released, \x1b[33m\`npm update -g safe-backup\`\x1b[0m\x1b[1m to update`);
 
         await dir.mk(appDataPath);
         await parseParams();
@@ -118,17 +122,25 @@ let config: Config = {} as any,
         await dir.mk(config.output);
         await getPassword();
 
+        const newerVersion = await updateCheck(PATH.join(__dirname, '../', 'package.json')).catch((err) => {
+            log.warn(`Failed to check for updates with npm`);
+        });
+
+        if (newerVersion)
+            log.warn(`safe-backup v${newerVersion} released, \x1b[33m\`npm update -g safe-backup\`\x1b[0m\x1b[1m to update`);
+        else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
+
         for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
             forkWorker((i + 1).toString());
 
-        let promises = [];
+        let promises: Promise<void>[] = [];
 
         for (let i = config.input.length; i--;)
             promises.push(
                 backup({
                     input: config.input[i],
                     output: config.output,
-                    account: keys.account,
+                    passwordHash: keys.hash,
                     publicKey: keys.public,
                     encryptedPrivateKey: keys.encryptedPrivate,
                     ignore: config.ignore || []
@@ -180,6 +192,11 @@ function parseParams() {
                         type: 'array-of-string',
                         optional: true,
                         alias: 'I'
+                    }, {
+                        param: 'save-password',
+                        type: 'boolean',
+                        optional: true,
+                        alias: 's'
                     }
                 ],
                 id: 'regular'
@@ -261,6 +278,13 @@ function parseParams() {
                 },
                 id: 'import-key'
             })
+            .add({
+                params: {
+                    param: 'reset-config',
+                    type: 'boolean'
+                },
+                id: 'reset-config'
+            })
             .exec(async (err, args, id) => {
                 if (err)
                     if (process.argv.length === 2) log.info('No parameters were found, restoring configurations...'), resolve();
@@ -270,6 +294,8 @@ function parseParams() {
                         config.input = args.input;
                         config.output = args.output;
                         config.watch = args.watch;
+                        config.savePassword = args['save-password'] === false ? false : true;
+
                         if (args.ignore) {
                             config.ignore = [];
                             for (let i = args.ignore.length; i--;) {
@@ -282,11 +308,10 @@ function parseParams() {
                         break;
                     case 'decrypt':
                         if (!PATH.isAbsolute(args.decrypt)) return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), reject();
-                        const passwordHash = hashPassword(args.password ? args.password : await prompt.questions.getPassword()).toString('hex')
                         const t = Date.now();
                         forkWorker('1').sendJob('decrypt', {
                             input: args.decrypt,
-                            passwordHash: passwordHash
+                            passwordHash: hashPassword(args.password ? args.password : await prompt.questions.getPassword()).toString('hex')
                         }, (err) => {
                             if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(args.decrypt)}]`);
                             else {
@@ -319,6 +344,17 @@ function parseParams() {
                         await askQuestions().catch(reject);
                         resolve();
                         break;
+                    case 'reset-config':
+                        if (await prompt.questions.getYn(`Are you sure you wanna reset your configurations [Y/N]?`))
+                            fs.unlink(PATH.join(appDataPath, 'config.json'), (err) => {
+                                if (err)
+                                    if (err.code === 'ENOENT') console.log('There is no config.json');
+                                    else log.debug(err), console.log('Failed to delete config.json');
+                                else console.log('config.json deleted');
+                                reject();
+                            });
+                        else reject();
+                        break;
                     case 'reset-key':
                         if (await prompt.questions.getYn(`Are you sure you wanna reset your key [Y/N]?`))
                             fs.unlink(PATH.join(appDataPath, 'key.safe'), (err) => {
@@ -349,7 +385,7 @@ function parseParams() {
                             if (err) return log.debug(err), console.log(`Key pair not at ${PATH.resolve(args['import-key'])}`), reject();
                             try {
                                 keys = decryptSafe(data);
-                                if (!keys.public || !keys.encryptedPrivate || !keys.account) throw null;
+                                if (!keys.public || !keys.encryptedPrivate) throw null;
                                 fs.writeFile(PATH.join(appDataPath, 'key.safe'), data, (err) => {
                                     if (err) log.debug(err), console.log('Failed to import key');
                                     else console.log(`Key imported`);
@@ -373,6 +409,7 @@ function askQuestions() {
             config.input = await prompt.questions.getInput();
             config.output = await prompt.questions.getOutput();
             config.watch = await prompt.questions.getWatch();
+            config.savePassword = true;
             await handleConfig(config);
             resolve();
         } catch (err) {
@@ -404,6 +441,7 @@ function handleConfig(c?: Config) {
                 for (let i = config[typeOfPath].length; i--;)
                     if (!PATH.isAbsolute(config[typeOfPath][i]))
                         return log.error(`Path must be absolute [${formatPath(config[typeOfPath][i])}]`), reject();
+                    else config[typeOfPath][i] = config[typeOfPath][i].replace(/(?:\\|\/)$/, '')
             resolve();
         }
     });
@@ -417,7 +455,8 @@ function getPassword() {
 
             try {
                 keys = decryptSafe(data);
-                if (!keys.public || !keys.encryptedPrivate || !keys.account) throw null;
+                if (!keys.public || !keys.encryptedPrivate) throw null;
+                if (!keys.hash) log.warn(`Save password function disabled in this key`);
             } catch (err) {
                 return reject(`Invalid key file`)
             }
@@ -427,15 +466,7 @@ function getPassword() {
 
         async function setPassword() {
 
-            const hash = hashPassword(await prompt.questions.setPassword()).toString('hex'),
-                account = crypto.randomBytes(32).toString('hex');
-
-            try {
-                await keytar.setPassword('safe-backup', account, hash);
-            } catch (err) {
-                log.warn(`Failed to save password to system keychain, is libsecret correctly installed?`);
-                return reject(err);
-            }
+            const hash = hashPassword(await prompt.questions.setPassword()).toString('hex');
 
             log.info(`Generating new RSA-4096 key pair...`);
 
@@ -458,9 +489,10 @@ function getPassword() {
                     cipher = crypto.createCipheriv('aes-256-gcm', hashPassword(hash, '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8'), iv),
                     safeCipher = crypto.createCipheriv('aes-256-ctr', 'c738b5fa19d2ddea7180a714c1e68079', 'b623a9863a81a793');
 
-                keys.account = account;
                 keys.public = publicKey;
                 keys.encryptedPrivate = Buffer.concat([cipher.update(privateKey), cipher.final(), cipher.getAuthTag(), iv]).toString('hex');
+
+                if (config.savePassword) keys.hash = hash;
 
                 fs.writeFile(PATH.join(appDataPath, 'key.safe'),
                     Buffer.concat([safeCipher.update(JSON.stringify(keys)), safeCipher.final()]), (err) => {
@@ -516,7 +548,7 @@ function backupDaemon(input: string) {
         backup({
             input: input,
             output: config.output,
-            account: keys.account,
+            passwordHash: keys.hash,
             publicKey: keys.public,
             encryptedPrivateKey: keys.encryptedPrivate,
             ignore: config.ignore || []

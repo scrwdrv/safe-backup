@@ -22,6 +22,7 @@ npm update -g safe-backup
 safe-backup --input <inputPath1> [inputPath2 [inputPath3 ...]] 
             --output <outputPath1> [outputPath2 [outputPath3 ...]] 
             [--watch [interval]] [--ignore <regex> [regex [regex...]] 
+            [--save-password [true|false]]
 
 safe-backup --decrypt <backupPath> [--password <password>]
 
@@ -29,12 +30,13 @@ safe-backup --help
 safe-backup --version
 safe-backup --config
 safe-backup --build-config
+safe-backup --reset-config
 safe-backup --reset-key
+
 safe-backup --log
 
 safe-backup --export-key [path]
 safe-backup --import-key <path>
-
 
 Options:
 
@@ -42,6 +44,9 @@ Options:
     -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rule with regex.  
+    -s --save-password  Save password to system. When backup folder, previous password will be reused,
+                        so unchanged files don't need to be re-encrypt (a lot more faster).
+                        This parameter set to true by default.
 
     -d --decrypt        Absolute path of encrypted file to decrypt.
     -p --password       Password for decryption (not recommended to use password in command line).
@@ -50,6 +55,7 @@ Options:
     -v --version        Show version.
     -c --config         Show current configuration.
     -b --build-config   Start building configurations.
+    --reset-config      Delete configuration file.
     --reset-key         Delete both public & private key, 
                         previously encrypted files can still decrypt by original password.
     -l --log            Show location of log files.

@@ -1,13 +1,12 @@
-import CPC from 'worker-communication';
 import { loggerClient } from 'cluster-ipc-logger';
-import { Writable } from 'stream';
-import * as fs from 'fs';
-import * as PATH from 'path';
-import * as crypto from 'crypto';
 import * as regex from 'simple-regex-toolkit';
-import { platform } from 'os';
+import CPC from 'worker-communication';
 import * as archive from './archive';
-import * as keytar from 'keytar';
+import { Writable } from 'stream';
+import * as crypto from 'crypto';
+import { platform } from 'os';
+import * as PATH from 'path';
+import * as fs from 'fs';
 
 process.on('SIGINT', () => { });
 
@@ -128,7 +127,6 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
         });
     }
 
-
 }).onMaster('backup', async (req: BackupOptions, res) => {
 
     let bytesLength = 0,
@@ -147,7 +145,7 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
         })),
         isFile = inputStats.isFile(),
         l = req.output.length,
-        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255) + '.backup',
+        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 240) + '.backup',
         outputs = req.output.map(p => { return fs.createWriteStream(PATH.join(p, fileName + '.temp')); }),
         writeStream = new Writable({
             write(chunk, encoding, next) {
@@ -271,9 +269,12 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                 head = await checkHead(path);
                 previousBackupPath = path;
                 if (head.encryptedPrivateKey.toString('hex') !== req.encryptedPrivateKey)
-                    log.warn(`Private key is different from previous backup [${formatPath(path)}]`), head = null;
+                    log.warn(`Private key is different from previous backup, re-encrypting... [${formatPath(path)}]`), head = null;
                 else break;
             } catch (err) { }
+
+
+            if (head && !req.passwordHash) log.warn(`Previous backup found but save password function is disabled, re-encrypting... [${formatPath(req.input)}]`), head = null;
 
             const regs = req.ignore.map(str => {
                 return regex.from(str)
@@ -283,12 +284,11 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
 
                 log.info(`Previous backup found, comparing modifications... [${formatPath(req.input)}]`);
 
-                const passwordHash = await keytar.getPassword('safe-backup', req.account),
-                    privateKeyDecipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(passwordHash), head.encryptedPrivateKey.slice(-12)).setAuthTag(head.encryptedPrivateKey.slice(-28, -12)),
+                const privateKeyDecipher = crypto.createDecipheriv('aes-256-gcm', hashPassword(req.passwordHash), head.encryptedPrivateKey.slice(-12)).setAuthTag(head.encryptedPrivateKey.slice(-28, -12)),
                     privateKey = crypto.createPrivateKey({
                         key: Buffer.concat([privateKeyDecipher.update(head.encryptedPrivateKey.slice(0, -28)), privateKeyDecipher.final()]),
                         format: 'pem',
-                        passphrase: passwordHash
+                        passphrase: req.passwordHash
                     }),
                     extract = new archive.Extract();
 
@@ -455,8 +455,6 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                 }
 
             } else {
-
-                log.info(`Previous backup not found, making new one... [${formatPath(req.input)}]`);
 
                 key = crypto.randomBytes(32);
 

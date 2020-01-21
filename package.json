@@ -1,6 +1,6 @@
 {
   "name": "safe-backup",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "A real-time backup CLI tool written in Typescript. safe-back helps you sync file/folder into a single password encrypted storage. Using technology of RSA & AES.",
   "main": "index.js",
   "scripts": {
@@ -36,7 +36,6 @@
     "appdata-path": "^1.0.0",
     "cli-params": "^1.2.1",
     "cluster-ipc-logger": "^1.1.7",
-    "keytar": "^5.0.0",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.9",
     "simple-regex-toolkit": "^1.0.3",
@@ -44,7 +43,6 @@
     "worker-communication": "^1.0.4"
   },
   "devDependencies": {
-    "@types/node": "^13.1.8",
-    "nexe": "^3.3.2"
+    "@types/node": "^13.1.8"
   }
 }
