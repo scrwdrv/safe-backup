@@ -18,7 +18,7 @@ interface IndexHeader {
 
 class ExtractStream extends stream.Readable {
     constructor() {
-        super()
+        super();
     }
     skip(cb: () => void) {
         this.on('end', cb);
@@ -149,7 +149,7 @@ export class Extract {
 
             while (index !== -1 && arr.length < 4) {
                 const i = c.indexOf(',', index);
-                arr.push(c.slice(index, i === -1 ? undefined : i).toString())
+                arr.push(c.slice(index, i === -1 ? undefined : i).toString());
                 index = i + 1;
             }
 

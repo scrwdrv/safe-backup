@@ -80,7 +80,6 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                 });
             })();
 
-
             function mkdir(dirname: string, cb: (err?: NodeJS.ErrnoException) => void) {
                 if (mkedDir[dirname]) return cb();
                 fs.mkdir(PATH.join(output, dirname), { recursive: true, mode: 0o755 }, (err) => {

@@ -142,7 +142,7 @@ let config: Config = {} as any,
         else exit();
 
     } catch (err) {
-        if (err) log.error(err)
+        if (err) log.error(err);
         return exit();
     }
 

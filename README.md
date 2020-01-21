@@ -11,6 +11,11 @@ A real-time backup CLI tool written in Typescript. safe-back helps you sync file
 npm i -g safe-backup
 ```
 
+## Update
+```sh
+npm update -g safe-backup
+```
+
 ## Usage 
 ```
 
@@ -51,7 +56,7 @@ Options:
 
     --export-key        Export current key.
     --import-key        Import previously generated key.
-    
+
 ```
 
 ## Contributing
