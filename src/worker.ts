@@ -361,8 +361,8 @@ cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
                             fs.createReadStream(path)
                                 .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(stats.name)))
                                 .pipe(pack.entry(stats, () => {
-                                    if (streamDropped) return next()
-                                    pending = false
+                                    if (streamDropped) return next();
+                                    pending = false;
                                 }));
                         }
 
