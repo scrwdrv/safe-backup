@@ -1,10 +1,11 @@
 import { loggerServer, loggerClient } from 'cluster-ipc-logger';
 import physicalCores from 'physical-cores';
+import updateCheck from 'startup-update-check';
 import CPC from 'worker-communication';
 import CLIParams from 'cli-params';
 import Prompt from './prompt';
 import * as regex from 'simple-regex-toolkit';
-import getAppDataPath from "appdata-path";
+import getAppDataPath from 'appdata-path';
 import * as cluster from 'cluster';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
@@ -105,6 +106,11 @@ let config: Config = {} as any,
 (async function init() {
 
     try {
+
+        const newerVersion = await updateCheck(PATH.join(__dirname, '../', 'package.json')).catch((err) => { });
+
+        if (newerVersion)
+            log.warn(`safe-backup v${newerVersion} released, \x1b[33m\`npm update -g safe-backup\`\x1b[0m\x1b[1m to update`);
 
         await dir.mk(appDataPath);
         await parseParams();

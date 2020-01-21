@@ -40,6 +40,7 @@
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.9",
     "simple-regex-toolkit": "^1.0.3",
+    "startup-update-check": "^1.0.1",
     "worker-communication": "^1.0.4"
   },
   "devDependencies": {
