@@ -8,6 +8,7 @@ import CLIParams from 'cli-params';
 import Logger from 'colorful-log';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
+import watch from 'node-watch';
 import Prompt from './prompt';
 import * as PATH from 'path';
 import color from 'addcolor';
@@ -564,7 +565,7 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
     }
 
     const watcher =
-        fs.watch(path, { recursive: !isFile }, (evt, file) => {
+        watch(path, { recursive: !isFile }, (evt, file) => {
             if (regs) {
                 const arr = file.split(PATH.sep);
                 for (let i = regs.length; i--;)
