@@ -518,7 +518,7 @@ function forkWorker(id: string) {
 }
 
 function backup(options: BackupOptions) {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
         const worker = getWokrer(),
             t = Date.now();
         running.push(worker.id);
@@ -605,13 +605,20 @@ async function exit(retry: number = 0) {
         });
     }
 
-    for (let i = workers.length; i--;)
-        workers.pop()
-            .removeAllListeners('exit')
-            .kill();
+    log.info('Saving logs before exit...');
 
-    exitState = 2;
-    log.save().then(() => process.exit()).catch(() => exit(retry + 1));
+    Promise.all(workers.map(worker => {
+        return new Promise<void>(resolve =>
+            worker.sendJob('saveLog', null, () => {
+                worker.removeAllListeners('exit').kill();
+                resolve();
+            })
+        )
+    })).then(() => {
+        workers = [];
+        exitState = 2;
+        log.save().then(() => process.exit()).catch(() => exit(retry + 1));
+    });
 }
 
 function decryptSafe(data: Buffer) {

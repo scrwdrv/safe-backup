@@ -9,6 +9,8 @@ import { platform } from 'os';
 import * as PATH from 'path';
 import * as fs from 'fs';
 
+process.on('SIGINT', () => { });
+
 type encryptHead = {
     encryptedPrivateKey: Buffer;
     encryptedKey: Buffer;
@@ -25,7 +27,11 @@ const appDataPath = getAppDataPath('safe-backup'),
     }),
     isWin = platform() === 'win32';
 
-cpc.onMaster('decrypt', async (req: DecryptOptions, res) => {
+cpc.onMaster('saveLog', async (req, res) => {
+
+    log.save().then(res).catch(res);
+
+}).onMaster('decrypt', async (req: DecryptOptions, res) => {
 
     log.info(`Decrypting & extracting file... [${formatPath(req.input)}]`);
 
