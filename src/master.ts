@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import * as dir from 'recurdir';
 import Prompt from './prompt';
 import * as PATH from 'path';
+import color from 'addcolor';
 import * as fs from 'fs';
 
 process.on('SIGINT', () => exit());
@@ -126,7 +127,7 @@ let config: Config = {} as any,
         });
 
         if (newerVersion)
-            log.warn(`safe-backup v${newerVersion} released, \x1b[33m\`npm update -g safe-backup\`\x1b[0m\x1b[1m to update`);
+            log.warn(`safe-backup v${newerVersion} released, ${color.yellow('`npm update -g safe-backup`')} to update`);
         else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
 
         for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
@@ -647,15 +648,14 @@ function prettyJSON(json: { [key: string]: any } | string) {
     const str = typeof json === 'string' ? json : JSON.stringify(json, null, 4);
     return str.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
         (match) => {
-            let cls = '\x1b[35m\x1b[1m';
-            if (/^"/.test(match)) {
-                if (/:$/.test(match)) {
-                    cls = '\x1b[36m\x1b[1m';
-                } else {
-                    cls = '\x1b[37m\x1b[1m';
-                }
-            }
-            return cls + match + '\x1b[0m';
+            let cls: string;
+
+            if (/^"/.test(match))
+                if (/:$/.test(match)) cls = color.code.fg.cyan + color.style.bright;
+                else cls = color.code.fg.white + color.style.bright;
+            else cls = color.code.fg.magenta + color.style.bright;
+
+            return cls + match + color.code.reset;
         }
     );
 }

@@ -1,4 +1,5 @@
 import * as readline from 'readline';
+import color from 'addcolor';
 
 export default class Prompt {
 
@@ -15,7 +16,7 @@ export default class Prompt {
     private ask(question: string) {
         return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
-            this.rl.question('\n' + question + '\n \x1b[36m\x1b[1m>\x1b[0m ', (val) => {
+            this.rl.question('\n' + question + '\n' + color.cyan(' > ', 'bright'), (val) => {
                 this.end();
                 resolve(val);
             });
@@ -61,7 +62,7 @@ export default class Prompt {
         setPassword: () => {
             return new Promise<string>(resolve =>
                 this.ask('Set your password for encryption: ').then(password =>
-                    this.questions.getYn(`Please confirm your password is \x1b[33m\x1b[1m${password}\x1b[0m [Y/N]? `).then(boo => {
+                    this.questions.getYn(`Please confirm your password is ${color.yellow(password, 'bright')} [Y/N]? `).then(boo => {
                         if (boo) resolve(password);
                         else this.questions.getPassword().then(resolve);
                     })
