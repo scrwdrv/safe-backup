@@ -605,7 +605,7 @@ async function exit(retry: number = 0) {
         });
     }
 
-    log.info('Saving logs before exit...');
+    if (workers.length) log.info('Saving logs before exit...');
 
     Promise.all(workers.map(worker => {
         return new Promise<void>(resolve =>

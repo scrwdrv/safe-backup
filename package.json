@@ -9,6 +9,13 @@
   "bin": {
     "safe-backup": "./index.js"
   },
+  "pkg": {
+    "scripts": [
+      "./lib/*.js",
+      "./index.js"
+    ],
+    "assets": "./package.json"
+  },
   "preferGlobal": true,
   "repository": {
     "type": "git",
