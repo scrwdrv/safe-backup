@@ -155,8 +155,7 @@ let config: Config = {} as any,
 
         await Promise.all(promises);
 
-        if (config.watch) safetyGuard();
-        else exit();
+        if (!config.watch) exit();
 
     } catch (err) {
         if (err) log.error(err);
@@ -589,25 +588,6 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
         }) : null;
 }
 
-function safetyGuard() {
-    let exited = false,
-        errorsCount = 0;
-
-    logServer.on('error', () => {
-        if (exited) return;
-        errorsCount++;
-        if (errorsCount > config.input.length * 10) {
-            log.error(`Too many errors occurred, something might went wrong, exiting...`)
-            exited = true;
-            exit();
-        }
-    });
-
-    setInterval(() => {
-        errorsCount = 0;
-    }, 60000);
-}
-
 async function exit(retry: number = 0) {
     if (exitState === 2 || retry > 3) return process.exit();
     exitState = 1;
@@ -631,7 +611,7 @@ async function exit(retry: number = 0) {
             .kill();
 
     exitState = 2;
-    logServer.save().then(process.exit).catch(() => exit(retry + 1));
+    log.save().then(() => process.exit()).catch(() => exit(retry + 1));
 }
 
 function decryptSafe(data: Buffer) {
