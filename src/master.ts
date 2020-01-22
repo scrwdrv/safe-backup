@@ -375,7 +375,7 @@ function parseParams() {
                             if (err) return log.debug(err), console.log('Key pair not found'), reject();
                             fs.writeFile(args['export-key'], data, (err) => {
                                 if (err) log.debug(err), console.log('Failed to export key');
-                                else console.log(`Key exported to  ${PATH.resolve(args['export-key'])}`);
+                                else console.log(`Key exported to ${PATH.resolve(args['export-key'])}`);
                                 reject();
                             });
                         });
