@@ -652,9 +652,9 @@ function prettyJSON(json: { [key: string]: any } | string) {
             let cls: string;
 
             if (/^"/.test(match))
-                if (/:$/.test(match)) cls = color.code.fg.cyan + color.style.bright;
-                else cls = color.code.fg.white + color.style.bright;
-            else cls = color.code.fg.magenta + color.style.bright;
+                if (/:$/.test(match)) cls = color.code.fg.cyan + color.code.style.bright;
+                else cls = color.code.fg.white + color.code.style.bright;
+            else cls = color.code.fg.magenta + color.code.style.bright;
 
             return cls + match + color.code.reset;
         }
