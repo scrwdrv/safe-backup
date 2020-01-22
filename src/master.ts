@@ -1,4 +1,3 @@
-import { loggerServer, loggerClient } from 'cluster-ipc-logger';
 import updateCheck from 'startup-update-check';
 import * as regex from 'simple-regex-toolkit';
 import physicalCores from 'physical-cores';
@@ -6,6 +5,7 @@ import getAppDataPath from 'appdata-path';
 import CPC from 'worker-communication';
 import * as cluster from 'cluster';
 import CLIParams from 'cli-params';
+import Logger from 'colorful-log';
 import * as crypto from 'crypto';
 import * as dir from 'recurdir';
 import Prompt from './prompt';
@@ -15,6 +15,7 @@ import * as fs from 'fs';
 process.on('SIGINT', () => exit());
 
 declare global {
+
     interface Config {
         input: string[];
         output: string[];
@@ -43,18 +44,16 @@ declare global {
         encryptedPrivate: string;
         hash?: string
     }
+
 }
 
 const appDataPath = getAppDataPath('safe-backup'),
     cpc = new CPC(),
     prompt = new Prompt(),
-    logServer = new loggerServer({
-        directory: PATH.join(appDataPath, 'logs'),
-        saveInterval: 60000
-    }),
-    log = new loggerClient({
+    log = new Logger({
         system: 'master',
         cluster: 0,
+        path: PATH.join(appDataPath, 'logs'),
         debug: false
     }),
     helpText = `

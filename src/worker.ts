@@ -1,14 +1,13 @@
-import { loggerClient } from 'cluster-ipc-logger';
 import * as regex from 'simple-regex-toolkit';
+import getAppDataPath from 'appdata-path';
 import CPC from 'worker-communication';
 import * as archive from './archive';
+import Logger from 'colorful-log';
 import { Writable } from 'stream';
 import * as crypto from 'crypto';
 import { platform } from 'os';
 import * as PATH from 'path';
 import * as fs from 'fs';
-
-process.on('SIGINT', () => { });
 
 type encryptHead = {
     encryptedPrivateKey: Buffer;
@@ -16,10 +15,12 @@ type encryptHead = {
     isFile?: boolean;
 }
 
-const cpc = new CPC(),
-    log = new loggerClient({
+const appDataPath = getAppDataPath('safe-backup'),
+    cpc = new CPC(),
+    log = new Logger({
         system: 'worker',
-        cluster: process.env.workerId,
+        cluster: parseInt(process.env.workerId),
+        path: PATH.join(appDataPath, 'logs'),
         debug: false
     }),
     isWin = platform() === 'win32';
