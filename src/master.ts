@@ -74,9 +74,9 @@ Usage:
     safe-backup --build-config
     safe-backup --reset-config
     safe-backup --reset-key
-
     safe-backup --log
-
+    safe-backup --export-config [path]
+    safe-backup --import-config <path>
     safe-backup --export-key [path]
     safe-backup --import-key <path>
 
@@ -86,7 +86,7 @@ Options:
     -o --output         Absolute path(s) of folder to store encrypted file, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rule with regex.  
-    -s --save-password  Save password to system. When backup folders, previous password will be reused,
+    -s --save-password  Save password to the system. When backup folders, previous password will be reused,
                         so unchanged files don't need to be re-encrypt (a lot more faster).
                         This parameter set to true by default.
 
@@ -96,12 +96,13 @@ Options:
     -h --help           Show this screen.
     -v --version        Show version.
     -c --config         Show current configuration.
-    -b --build-config   Start building configurations.
+    -b --build-config   Start building configuration.
     --reset-config      Delete configuration file.
     --reset-key         Delete both public & private key, 
                         previously encrypted files can still decrypt by original password.
     -l --log            Show location of log files.
-
+    --export-config     Export current configuration.
+    --import-config     Import previously generated configuration.
     --export-key        Export current key.
     --import-key        Import previously generated key.
     `;
@@ -128,7 +129,7 @@ let config: Config = {} as any,
         });
 
         if (newerVersion)
-            log.warn(`safe-backup v${newerVersion} released, ${color.yellow('`npm update -g safe-backup`')} to update`);
+            log.warn(`safe-backup v${newerVersion} released, ${color.yellowBright('`npm update -g safe-backup`')} to update`);
         else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
 
         for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
@@ -144,7 +145,7 @@ let config: Config = {} as any,
                     passwordHash: keys.hash,
                     publicKey: keys.public,
                     encryptedPrivateKey: keys.encryptedPrivate,
-                    ignore: config.ignore || []
+                    ignore: config.ignore
                 }).then(() => {
                     if (config.watch) return fs.stat(config.input[i], (err, stats) => {
                         if (err) return log.debug(err),
@@ -250,6 +251,13 @@ function parseParams() {
             })
             .add({
                 params: {
+                    param: 'reset-config',
+                    type: 'boolean'
+                },
+                id: 'reset-config'
+            })
+            .add({
+                params: {
                     param: 'reset-key',
                     type: 'boolean'
                 },
@@ -262,6 +270,21 @@ function parseParams() {
                     alias: 'l'
                 },
                 id: 'log'
+            })
+            .add({
+                params: {
+                    param: 'export-config',
+                    type: 'string',
+                    default: PATH.join(process.cwd(), 'config.json')
+                },
+                id: 'export-config'
+            })
+            .add({
+                params: {
+                    param: 'import-config',
+                    type: 'string'
+                },
+                id: 'import-config'
             })
             .add({
                 params: {
@@ -278,16 +301,9 @@ function parseParams() {
                 },
                 id: 'import-key'
             })
-            .add({
-                params: {
-                    param: 'reset-config',
-                    type: 'boolean'
-                },
-                id: 'reset-config'
-            })
             .exec(async (err, args, id) => {
                 if (err)
-                    if (process.argv.length === 2) log.info('No parameters were found, restoring configurations...'), resolve();
+                    if (process.argv.length === 2) log.info('No parameters were found, restoring configuration...'), resolve();
                     else return console.log(err), console.log(helpText), reject();
                 else switch (id) {
                     case 'regular':
@@ -295,15 +311,14 @@ function parseParams() {
                         config.output = args.output;
                         config.watch = args.watch;
                         config.savePassword = args['save-password'] === false ? false : true;
-
-                        if (args.ignore) {
-                            config.ignore = [];
+                        config.ignore = [];
+                        if (args.ignore)
                             for (let i = args.ignore.length; i--;) {
                                 if (regex.isRegex(args.ignore[i]))
                                     config.ignore.push(args.ignore[i]);
                                 else return log.error(`Invalid regex [${args.ignore[i]}]`), reject();
                             }
-                        }
+
                         resolve();
                         break;
                     case 'decrypt':
@@ -345,7 +360,7 @@ function parseParams() {
                         resolve();
                         break;
                     case 'reset-config':
-                        if (await prompt.questions.getYn(`Are you sure you wanna reset your configurations [Y/N]?`))
+                        if (await prompt.questions.getYn(`Are you sure you wanna reset your configuration [Y/N]?`))
                             fs.unlink(PATH.join(appDataPath, 'config.json'), (err) => {
                                 if (err)
                                     if (err.code === 'ENOENT') console.log('There is no config.json');
@@ -382,7 +397,7 @@ function parseParams() {
                         break;
                     case 'import-key':
                         fs.readFile(args['import-key'], (err, data) => {
-                            if (err) return log.debug(err), console.log(`Key pair not at ${PATH.resolve(args['import-key'])}`), reject();
+                            if (err) return log.debug(err), console.log(`Key pair not found at ${PATH.resolve(args['import-key'])}`), reject();
                             try {
                                 keys = decryptSafe(data);
                                 if (!keys.public || !keys.encryptedPrivate) throw null;
@@ -397,6 +412,34 @@ function parseParams() {
                             }
                         })
                         break;
+                    case 'export-config':
+                        fs.readFile(PATH.join(appDataPath, 'config.json'), 'utf8', (err, data) => {
+                            if (err) return log.debug(err), console.log('Configuration not found'), reject();
+                            fs.writeFile(args['export-config'], data, (err) => {
+                                if (err) log.debug(err), console.log('Failed to export configuration');
+                                else console.log(`Configuration exported to ${PATH.resolve(args['export-config'])}`);
+                                reject();
+                            });
+                        });
+                        break;
+                    case 'import-config':
+                        fs.readFile(args['import-config'], 'utf8', (err, data) => {
+                            if (err) return log.debug(err), console.log(`Configuration not found at ${PATH.resolve(args['import-config'])}`), reject();
+                            try {
+                                config = JSON.parse(data)
+                                if (configValidator(config))
+                                    fs.writeFile(PATH.join(appDataPath, 'config.json'), data, (err) => {
+                                        if (err) log.debug(err), console.log('Failed to import configuration');
+                                        else console.log(`Configuration imported`);
+                                        reject();
+                                    });
+                                else throw null;
+                            } catch (err) {
+                                console.log(`Invalid configuration`);
+                                reject();
+                            }
+                        })
+                        break;
                 }
             })
     )
@@ -404,12 +447,14 @@ function parseParams() {
 
 function askQuestions() {
     return new Promise<void>(async (resolve, reject) => {
-        log.info(`Start building configurations...`);
+        log.info(`Start building configuration...`);
         try {
             config.input = await prompt.questions.getInput();
             config.output = await prompt.questions.getOutput();
             config.watch = await prompt.questions.getWatch();
-            config.savePassword = true;
+            config.savePassword = await prompt.questions.getSavePassowrd();
+            config.ignore = await prompt.questions.getIgnore();
+
             await handleConfig(config);
             resolve();
         } catch (err) {
@@ -420,10 +465,13 @@ function askQuestions() {
 
 function handleConfig(c?: Config) {
     return new Promise<void>((resolve, reject) => {
-        if (c) fs.writeFile(PATH.join(appDataPath, 'config.json'), JSON.stringify(c, null, 4), (err) => {
-            if (err) return reject(err);
-            checkPath();
-        })
+        if (c)
+            if (configValidator(c))
+                fs.writeFile(PATH.join(appDataPath, 'config.json'), JSON.stringify(c, null, 4), (err) => {
+                    if (err) return reject(err);
+                    checkPath();
+                })
+            else log.error(`Invalid configuration`), reject();
         else fs.readFile(PATH.join(appDataPath, 'config.json'), 'utf8', async (err, data) => {
             if (c === undefined) {
                 if (err) return reject(err);
@@ -431,8 +479,14 @@ function handleConfig(c?: Config) {
                 resolve();
             } else {
                 if (err) await askQuestions().catch(reject);
-                else config = JSON.parse(data);
-                checkPath();
+                else try {
+                    config = JSON.parse(data);
+                } catch (err) {
+                    return log.error(`Invalid configuration`), reject(err)
+                }
+
+                if (configValidator(config)) checkPath();
+                else log.error(`Invalid configuration`), reject();
             }
         });
 
@@ -445,6 +499,15 @@ function handleConfig(c?: Config) {
             resolve();
         }
     });
+}
+
+function configValidator(c: Config) {
+    if (!c.input || !Array.isArray(c.input)) return false;
+    if (!c.output || !Array.isArray(c.output)) return false;
+    if (c.watch === undefined) return false;
+    if (c.savePassword === undefined) return false;
+    if (!c.ignore || !Array.isArray(c.ignore)) return false;
+    return true;
 }
 
 function getPassword() {
@@ -550,7 +613,7 @@ function backupDaemon(input: string) {
             passwordHash: keys.hash,
             publicKey: keys.public,
             encryptedPrivateKey: keys.encryptedPrivate,
-            ignore: config.ignore || []
+            ignore: config.ignore
         }).then(() =>
             setTimeout(backupDaemon, config.watch * 1000, input));
         delete modified[input];
@@ -566,11 +629,10 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
 
     const watcher =
         watch(path, { recursive: !isFile }, (evt, file) => {
-            if (regs) {
-                const arr = file.split(PATH.sep);
-                for (let i = regs.length; i--;)
-                    if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
-            }
+            const arr = file.split(PATH.sep);
+            for (let i = regs.length; i--;)
+                if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
+
             modified[path] = true;
             log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
         }).on('error', (err) => {
@@ -585,9 +647,9 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
             setTimeout(watchMod, 10000, path, isFile, retry + 1);
         }),
         timeout = setTimeout(() => retry = 0, 60000),
-        regs = config.ignore ? config.ignore.map(str => {
+        regs = config.ignore.map(str => {
             return regex.from(str)
-        }) : null;
+        })
 }
 
 async function exit(retry: number = 0) {
@@ -652,9 +714,9 @@ function prettyJSON(json: { [key: string]: any } | string) {
             let cls: string;
 
             if (/^"/.test(match))
-                if (/:$/.test(match)) cls = color.code.fg.cyan + color.code.style.bright;
-                else cls = color.code.fg.white + color.code.style.bright;
-            else cls = color.code.fg.magenta + color.code.style.bright;
+                if (/:$/.test(match)) cls = color.code.fg.cyanBright;
+                else cls = color.code.fg.whiteBright;
+            else cls = color.code.fg.magentaBright;
 
             return cls + match + color.code.reset;
         }

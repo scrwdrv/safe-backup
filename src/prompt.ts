@@ -1,3 +1,4 @@
+import * as regex from 'simple-regex-toolkit';
 import * as readline from 'readline';
 import color from 'addcolor';
 
@@ -16,7 +17,7 @@ export default class Prompt {
     private ask(question: string) {
         return new Promise<string>(resolve => {
             if (!this.rl) this.getRl();
-            this.rl.question('\n' + question + '\n' + color.cyan(' > ', 'bright'), (val) => {
+            this.rl.question('\n' + question + '\n' + color.cyanBright(' > '), (val) => {
                 this.end();
                 resolve(val);
             });
@@ -59,10 +60,31 @@ export default class Prompt {
                 })
             )
         },
+        getSavePassowrd: () => {
+            return new Promise<boolean>(resolve =>
+                this.questions.getYn(`Whether to save your password (recommended on personal computer) [Y/N]? `).then(boo => {
+                    if (boo) resolve(true);
+                    else resolve(false);
+                })
+            )
+        },
+        getIgnore: (ignore = []) => {
+            return new Promise<string[]>(resolve =>
+                this.ask(`Exclude paths matches regular expression, e.g. /.+\\.log$/i [ENTER TO SKIP]: `).then(reg => {
+                    if (!reg) return resolve([]);
+                    if (regex.isRegex(reg)) ignore.push(reg);
+                    else return console.log(color.redBright(`Invalid regex: ${reg}`)), this.questions.getIgnore(ignore).then(resolve);
+                    this.questions.getYn(`More to exclude [Y/N]? `).then(boo => {
+                        if (boo) this.questions.getIgnore(ignore).then(resolve);
+                        else resolve(ignore);
+                    });
+                })
+            )
+        },
         setPassword: () => {
             return new Promise<string>(resolve =>
                 this.ask('Set your password for encryption: ').then(password =>
-                    this.questions.getYn(`Please confirm your password is ${color.yellow(password, 'bright')} [Y/N]? `).then(boo => {
+                    this.questions.getYn(`Please confirm your password is ${color.yellowBright(password)} [Y/N]? `).then(boo => {
                         if (boo) resolve(password);
                         else this.questions.getPassword().then(resolve);
                     })

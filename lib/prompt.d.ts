@@ -7,6 +7,8 @@ export default class Prompt {
         getInput: (inputs?: any[]) => Promise<string[]>;
         getOutput: (outputs?: any[]) => Promise<string[]>;
         getWatch: () => Promise<number>;
+        getSavePassowrd: () => Promise<boolean>;
+        getIgnore: (ignore?: any[]) => any;
         setPassword: () => Promise<string>;
         getPassword: () => Promise<string>;
         getYn: (question: string) => Promise<boolean>;
