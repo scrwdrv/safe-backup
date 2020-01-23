@@ -22,7 +22,7 @@ declare global {
     interface Keys {
         public: string;
         encryptedPrivate: string;
-        hash?: string;
+        passwordHash?: string;
     }
 }
 export {};

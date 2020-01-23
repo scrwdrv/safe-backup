@@ -36,8 +36,8 @@ export class Extract {
         this.input = new stream.Writable({});
         this.input._write = (chunk, encoding, next) => parseChunk(chunk, next);
         this.input._final = () => {
-            currentStream.push(null);
             exec = () => this.input.emit('finish');
+            currentStream.push(null);
         };
 
         let bytesLeft = 0,
@@ -54,19 +54,16 @@ export class Extract {
 
                 if (previousBuffer.length >= indexHeader.nameLength) {
 
-                    let iHeader = indexHeader,
-                        nameLength = iHeader.nameLength,
-                        name = previousBuffer.slice(0, nameLength).toString();
+                    const header = {
+                        name: previousBuffer.slice(0, indexHeader.nameLength).toString(),
+                        size: indexHeader.size,
+                        mtime: indexHeader.mtime,
+                        type: indexHeader.type
+                    }, nextChunk = previousBuffer.slice(indexHeader.nameLength);
+
+                    indexHeader = null;
 
                     exec = () => {
-
-                        const header = {
-                            name: name,
-                            size: iHeader.size,
-                            mtime: iHeader.mtime,
-                            type: iHeader.type
-                        }, nextChunk = previousBuffer.slice(nameLength);
-
                         currentStream = new ExtractStream();
                         currentStream._read = () => { };
 
@@ -82,10 +79,7 @@ export class Extract {
 
                         if (nextChunk.length) parseChunk(nextChunk, next);
                         else next();
-
                     }
-
-                    indexHeader = null;
 
                     if (currentStream) currentStream.push(null);
                     else exec();
@@ -101,16 +95,7 @@ export class Extract {
 
                     appendBuffer(c);
 
-                    const indexOfLastComma = (function findComma(offset = bytesLeft, found = 0) {
-
-                        const index = previousBuffer.indexOf(',', offset + 1);
-                        if (index > -1) {
-                            found++;
-                            if (found === 4) return index;
-                            return findComma(index, found);
-                        } else return false;
-
-                    })();
+                    const indexOfLastComma = findComma();
 
                     if (indexOfLastComma !== false) {
 
@@ -136,22 +121,23 @@ export class Extract {
             }
         }
 
+        function findComma(offset = bytesLeft, found = 0) {
+            const index = previousBuffer.indexOf(',', offset + 1);
+            if (index > -1) {
+                found++;
+                if (found === 4) return index;
+                return findComma(index, found);
+            } else return false;
+        }
+
         function appendBuffer(c: Buffer) {
             if (previousBuffer) previousBuffer = Buffer.concat([previousBuffer, c]);
             else previousBuffer = c;
         }
 
         function parseIndex(c: Buffer): IndexHeader {
-
-            let index = 0,
-                arr = [],
+            let arr = c.toString().split(','),
                 type: Header['type'];
-
-            while (index !== -1 && arr.length < 4) {
-                const i = c.indexOf(',', index);
-                arr.push(c.slice(index, i === -1 ? undefined : i).toString());
-                index = i + 1;
-            }
 
             switch (arr[0]) {
                 case '0':
