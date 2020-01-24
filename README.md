@@ -243,6 +243,10 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.3.16
+  - Add basic documentation
+  - Print version & github repo at startup
+  - v1.0.1 release
 - v1.3.12
   - Encrypt password hash twice
   - Little improvements on archive
