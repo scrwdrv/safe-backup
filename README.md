@@ -4,13 +4,12 @@
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 
----
 
 ## Installation
 
 - ### Install from [npm](https://www.npmjs.com/package/safe-backup) (node package manager)
 
-  *You can skip this section if you're quite familiar with Node.*
+  *You can skip this section to [install safe-backup](#install-safe-backup) if you're quite familiar with Node.*
     - ### Requirements
         - Node.js v11.6.0+
         - npm (included by Node.js nowadays)
@@ -18,7 +17,7 @@
 
     1. ### Install Node.js LTS
 
-        - ### Already installed node/nvm
+        - #### Already installed node/nvm
 
             If you have installed Node.js before, you can use `node -v` to check the version you have installed, if is outdated: 
             ```sh
@@ -35,7 +34,7 @@
             nvm use --lts
             ```
 
-        - ### Start from scratch
+        - #### Start from scratch
         
             For those who have never deal with Node.js before, it is recommended to use [nvm](https://github.com/nvm-sh/nvm) (node version manager) so you can have multiple versions of Node and switch to another version as you like. It's available on both Linux & Windows.
 
@@ -68,7 +67,7 @@
                 # 12.14.1
                 ```
 
-    2. ### Install safe-backup
+    2. ### <span id="install-safe-backup">Install safe-backup</span>
         Install safe-backup globally is recommended, so you can use it directly by calling `safe-backup` at the terminal.
         ```sh
         npm i -g safe-backup
@@ -82,7 +81,6 @@
 
     Currently support Linux, Windows & MacOS, all have been tested. To download latest Safe Backup binary and check out release notes, please head to [release page](https://github.com/scrwdrv/safe-backup/releases).
 
----
 
 ## Update
 ```sh
@@ -90,7 +88,6 @@ npm update -g safe-backup
 ```
 Update safe-backup by `npm update` is only available for those who install with npm. For binary users, download new version of binary at [release page](https://github.com/scrwdrv/safe-backup/releases) and replace it manually. You don't need to worry about losing your configuration or have your password reset, those files are saved at different directory based on your OS.
 
----
 
 ## Usage
  - Configuration & Config Builder
@@ -110,12 +107,12 @@ Update safe-backup by `npm update` is only available for those who install with 
         - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
         - MacOS: `/Users/username/Library/Application Support/safe-backup/config.json`
 
-- <span id="target">Backup</span>
+- <span id="backup">Backup</span>
 
   - Options:
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
-    |:--------------|:---:|:-------:|:--------------------:|---------------------------------------------------:|
+    |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
     |--input        | -i  | `false` |`string` \| `strings` | Absolute path(s) of folder/file to backup          |
     |--output       | -o  | `false` |`string` \| `strings` | Absolute path(s) of folder to store encrypted file |
     |--watch        | -w  | `true`  |`number` \| `null`    | Enable watch mode. Default check interval is `60`  |
@@ -127,11 +124,11 @@ Update safe-backup by `npm update` is only available for those who install with 
 
     - Backup one directory to another in watch mode and disable save password
         ```sh
-        safe-backup -i C:\Users\Bob\Pictures -o D:\Backup -w -s false
+        safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -w -s false
         ```
     - Mutiple input & output
         ```sh
-        safe-backup -i C:\Users\Bob\Pictures C:\Users\Bob\Videos -o D:\Backup F:\Backup 
+        safe-backup -i "C:\Users\Bob\Pictures" "C:\Users\Bob\Videos" -o "D:\Backup" "F:\Backup" 
         ```
     - Path contains spaces
         ```sh
@@ -139,7 +136,7 @@ Update safe-backup by `npm update` is only available for those who install with 
         ```
     - Exclude path with [regular expression](https://en.wikipedia.org/wiki/Regular_expression)
         ```sh
-        safe-backup -i C:\Users\Bob\Pictures -o D:\Backup -I "/^2018-/" "/.+\.tif$/i"
+        safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -I "/^2018-/" "/.+\.tif$/i"
         ```
 
 - Unpack & Decrypt
@@ -149,7 +146,7 @@ Update safe-backup by `npm update` is only available for those who install with 
   - Options:
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
-    |:--------------|:---:|:-------:|:--------------------:|---------------------------------------------------:|
+    |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
     |--decrypt      | -d  | `false` |`string`              | Absolute path of encrypted file to decrypt         |
     |--password     | -p  | `true`  |`string`              | Password for decryption (not recommended)          |
 
@@ -157,18 +154,18 @@ Update safe-backup by `npm update` is only available for those who install with 
 
       - Decrypt a previous encrypted file
         ```sh
-        safe-backup -d D:\Backup\C-Users-Bob-Pictures
+        safe-backup -d "D:\Backup\C-Users-Bob-Pictures"
         ```
       - Decrypt a previous encrypted file with password in command line (not recommended)
         ```sh
-        safe-backup -d D:\Backup\C-Users-Bob-Pictures -p 123
+        safe-backup -d "D:\Backup\C-Users-Bob-Pictures" -p "123"
         ```
 - <span id="misc">Misc</span>
 
   - Options:
 
-    | Parameter     |Alias| Value             |Description                                         |
-    |---------------|:---:|:-----------------:|---------------------------------------------------:|
+    | Parameter     |Alias| Value             | Description                                        |
+    |---------------|:---:|:-----------------:|:--------------------------------------------------:|
     |--help         | -h  |`null`             | Print out usage guide in command line              |
     |--version      | -v  |`null`             | Show version                                       |
     |--config       | -c  |`null`             | Show current configuration                         |
@@ -189,11 +186,10 @@ Update safe-backup by `npm update` is only available for those who install with 
         ```
       - Import key from previously generated `key.safe` file
         ```sh
-        safe-backup --import-key ./keys/key.safe
+        safe-backup --import-key "./keys/key.safe"
         ```
----
 
-## What's new?
+## Changelog
 - v1.3.12
   - Encrypt password hash twice
   - Little improvements on archive
@@ -226,7 +222,6 @@ Update safe-backup by `npm update` is only available for those who install with 
   - Work in progress
   - Add [cliParams](https://github.com/scrwdrv/cli-params) to parse arguments
 
----
 
 ## ToDo
 - Plain backup (no packing and encryption)
@@ -235,15 +230,12 @@ Update safe-backup by `npm update` is only available for those who install with 
 - Unpacked files to have original stats (mtime, permission, etc.)
 - GUI (not very useful to me though)
 
----
-
 ## Meta
 
 scrwdrv @ scrwdrv.tech@gmail.com
 
 Distributed under the MIT license. See ``LICENSE`` for more information.
 
----
 
 ## Contributing
 
