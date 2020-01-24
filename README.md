@@ -6,24 +6,23 @@
 
 ## Table of Contents
 
-- ### [Installation](#installation)
-  - #### [Install from npm](#install-from-npm-node-package-manager)
+- [Installation](#installation)
+  - [Install from npm](#install-from-npm-node-package-manager)
     - [Requirements](#requirements)
     - [Install Node.js LTS](#install-node.js-lts)
-       - [Already installed node/nvm](#already-installed-node/nvm)
-       - [Start from scratch](#start-from-scratch)
-  - #### [Download Prebuilt Binary](#download-prebuilt-binary)
-- ### [Update](#update)
-- ### [Usage](#usage)
-  - #### [Configuration & Config Builder](#configuration-&-config-builder)
-  - #### [Backup](#backup)
-  - #### [Unpack & Decrypt](#unpack-&-decrypt)
-  - #### [Misc](#misc)
-  
-- ### [Changelog](#changelog)
-- ### [Todo](#todo)
-- ### [Meta](#meta)
-- ### [Contributing](#contributing)
+        - [Already installed node/nvm](#already-installed-node/nvm)
+        - [Start from scratch](#start-from-scratch)
+  - [Download Prebuilt Binary](#download-prebuilt-binary)
+- [Update](#update)
+- [Usage](#usage)
+  - [Configuration & Config Builder](#configuration-&-config-builder)
+  - [Backup](#backup)
+  - [Unpack & Decrypt](#unpack-&-decrypt)
+  - [Misc](#misc)
+- [Changelog](#changelog)
+- [Todo](#todo)
+- [Meta](#meta)
+- [Contributing](#contributing)
 
 ## Installation
 
