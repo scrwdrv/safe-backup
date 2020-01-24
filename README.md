@@ -114,7 +114,7 @@
 ```sh
 npm update -g safe-backup
 ```
->Update safe-backup by `npm update` is only available for those who install with npm. For binary users, download new version of binary at [release page](https://github.com/scrwdrv/safe-backup/releases) and replace it manually. You don't need to worry about losing your configuration or have your password reset, those files are saved at different directory based on your OS.
+Update safe-backup by `npm update` is only available for those who install with npm. For binary users, download new version of binary at [release page](https://github.com/scrwdrv/safe-backup/releases) and replace it manually. You don't need to worry about losing your configuration or have your password reset, those files are saved at different directory based on your OS.
 
 
 ## Usage
