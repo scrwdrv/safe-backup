@@ -15,7 +15,7 @@
   - [Download Prebuilt Binary](#download-prebuilt-binary)
 - [Update](#update)
 - [Usage](#usage)
-  - [Configuration & Config Builder](#configuration-config-builder)
+  - [Configuration & Config Builder](#configuration--config-builder)
     - [Config builder](#config-builder)
     - [Configuration file](#configuration-file)
     - [Path to `config.json`](#path-to-configjson)
