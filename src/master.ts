@@ -121,7 +121,7 @@ let config: Config = {} as any,
 
         let pkg: { name: string; version: string; };
 
-        await new Promise((resolve, reject) => 
+        await new Promise((resolve, reject) =>
             fs.readFile(PATH.join(__dirname, '../', 'package.json'), 'utf8', async (err, data) => {
                 if (err) return reject(err);
                 pkg = JSON.parse(data);
@@ -356,7 +356,6 @@ function parseParams() {
                         reject();
                         break;
                     case 'version':
-                        console.log(`safe-backup version ${JSON.parse(fs.readFileSync(PATH.join(__dirname, '../', 'package.json'), 'utf8')).version}`);
                         reject();
                         break;
                     case 'config':
