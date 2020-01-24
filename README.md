@@ -4,30 +4,10 @@
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 
-## Features
-
-- Backup your sensitive file in the safest way
-  - Use `AES-256-CTR` for encryption, and `RSA-4096` for storing cipher key
-  - Password is salted and hashed, never store/use a plain password
-  - No way to decrypt without having the exact password
-  - Even hacker somehow obtained `key.safe` file with password hash inside (set `savePassword` to `false` then no one can ever crack it), there is no way to crack it without knowing the source code
-
-- Easy & powerful at the same time
-  - Support both file and folder
-  - Exclude files and folders with regular expression
-  - Real-time monitoring file changes and synchronize modified ones
-  - Pack complicate directory into a single file, easier to transport
-  - Cross platform friendly, tested on Linux, Windows & MacOS
-  - Original config & key pair is NOT needed for decryption, unpack your file on any devices
-  - [Config builder](#config-builde) to spare you from annoying parameters
-
-- Highly optimized on speed
-  - Created a whole new packaging format just for performance
-  - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
-  - Run in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
+![safe-backup-preview](https://github.com/scrwdrv/safe-backup/blob/master/assets/preview.png?raw=true)
 
 ## Table of Contents
-
+- [Features](#features)
 - [Installation](#installation)
   - [Install from npm](#install-from-npm-node-package-manager)
     - [Requirements](#requirements)
@@ -54,6 +34,30 @@
 - [Todo](#todo)
 - [Meta](#meta)
 - [Contributing](#contributing)
+
+
+## Features
+
+- Backup your sensitive file in the safest way
+  - Use `AES-256-CTR` for encryption, and `RSA-4096` for storing cipher key
+  - Password is salted and hashed, never store/use a plain password
+  - No way to decrypt without having the exact password
+  - Even hacker somehow obtained `key.safe` file with password hash inside (set `savePassword` to `false` then no one can ever crack it), there is no way to crack it without knowing the source code
+
+- Easy & powerful at the same time
+  - Support both file and folder
+  - Exclude files and folders with regular expression
+  - Real-time monitoring file changes and synchronize modified ones
+  - Pack complicate directory into a single file, easier to transport
+  - Cross platform friendly, tested on Linux, Windows & MacOS
+  - Original config & key pair is NOT needed for decryption, unpack your file on any devices
+  - [Config builder](#config-builde) to spare you from annoying parameters
+
+- Highly optimized on speed
+  - Created a whole new packaging format just for performance
+  - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
+  - Run in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
+
 
 ## Installation
 
