@@ -7,6 +7,7 @@ import * as cluster from 'cluster';
 import CLIParams from 'cli-params';
 import Logger from 'colorful-log';
 import * as crypto from 'crypto';
+import * as semver from 'semver';
 import * as dir from 'recurdir';
 import watch from 'node-watch';
 import Prompt from './prompt';
@@ -131,6 +132,9 @@ let config: Config = {} as any,
         if (newerVersion)
             log.warn(`safe-backup v${newerVersion} released, ${color.yellowBright('`npm update -g safe-backup`')} to update`);
         else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
+
+        if (semver.gt('11.6.0', process.version))
+            return log.warn(`Node.js v11.6.0 or higher version is required for safe-backup, please update your Node.js`), exit();
 
         for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
             forkWorker((i + 1).toString());
@@ -695,7 +699,7 @@ async function exit(retry: number = 0) {
 function decryptSafe(data: Buffer) {
     const safeDecipher = crypto.createDecipheriv('aes-256-ctr', 'c738b5fa19d2ddea7180a714c1e68079', 'b623a9863a81a793');
 
-    let keys:Keys = JSON.parse(Buffer.concat([safeDecipher.update(data), safeDecipher.final()]).toString());
+    let keys: Keys = JSON.parse(Buffer.concat([safeDecipher.update(data), safeDecipher.final()]).toString());
 
     if (keys.passwordHash) {
         const hashBuffer = Buffer.from(keys.passwordHash, 'hex'),

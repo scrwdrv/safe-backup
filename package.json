@@ -17,6 +17,9 @@
     "assets": "./package.json"
   },
   "preferGlobal": true,
+  "engines": {
+    "node": ">=11.6.0"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/scrwdrv/safe-backup.git"
@@ -47,6 +50,7 @@
     "node-watch": "^0.6.3",
     "physical-cores": "^1.0.2",
     "recurdir": "^1.0.9",
+    "semver": "^7.1.1",
     "simple-regex-toolkit": "^1.0.3",
     "startup-update-check": "^1.0.2",
     "worker-communication": "^1.0.8"
