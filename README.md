@@ -21,7 +21,7 @@
   - Pack complicate directory into a single file, easier to transport
   - Cross platform friendly, tested on Linux, Windows & MacOS
   - Original config & key pair is NOT needed for decryption, unpack your file on any devices
-  - [Config builder](#config-builde) to spare you from annoying parameters
+  - [Config builder](#config-builder) to spare you from annoying parameters
 
 - Highly optimized on speed
   - Created a whole new packaging format just for performance

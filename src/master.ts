@@ -119,24 +119,24 @@ let config: Config = {} as any,
 
     try {
 
-        await new Promise((resolve, reject) => {
+        let pkg: { name: string; version: string; };
+
+        await new Promise((resolve, reject) => 
             fs.readFile(PATH.join(__dirname, '../', 'package.json'), 'utf8', async (err, data) => {
                 if (err) return reject(err);
-                const pkg = JSON.parse(data);
-                console.log(`\n Safe Backup v${pkg.version}\n Github: ${color.blue('https://github.com/scrwdrv/safe-backup','underscore')}\n`);
-                await updateCheck({ name: pkg.name, version: pkg.version }).catch((err) => {
-                    log.warn(`Failed to check for updates with npm`);
-                });
+                pkg = JSON.parse(data);
+                console.log(`\n Safe Backup v${pkg.version}\n Github: ${color.blue('https://github.com/scrwdrv/safe-backup', 'underscore')}\n`);
                 resolve();
             })
-        });
+        );
+
         await dir.mk(appDataPath);
         await parseParams();
         await handleConfig(Object.keys(config).length ? config : null);
         await dir.mk(config.output);
         await getPassword();
 
-        const newerVersion = await updateCheck(PATH.join(__dirname, '../', 'package.json')).catch((err) => {
+        const newerVersion = await updateCheck({ name: pkg.name, version: pkg.version }).catch((err) => {
             log.warn(`Failed to check for updates with npm`);
         });
 
@@ -333,7 +333,6 @@ function parseParams() {
                                     config.ignore.push(args.ignore[i]);
                                 else return log.error(`Invalid regex [${args.ignore[i]}]`), reject();
                             }
-
                         resolve();
                         break;
                     case 'decrypt':
