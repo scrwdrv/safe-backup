@@ -67,7 +67,7 @@
                 # 12.14.1
                 ```
 
-    2. ### <span id="install-safe-backup">Install safe-backup</span>
+    2. ### Install safe-backup
         Install safe-backup globally is recommended, so you can use it directly by calling `safe-backup` at the terminal.
         ```sh
         npm i -g safe-backup
@@ -107,7 +107,7 @@ Update safe-backup by `npm update` is only available for those who install with 
         - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
         - MacOS: `/Users/username/Library/Application Support/safe-backup/config.json`
 
-- <span id="backup">Backup</span>
+- Backup
 
   - Options:
  
@@ -160,7 +160,7 @@ Update safe-backup by `npm update` is only available for those who install with 
         ```sh
         safe-backup -d "D:\Backup\C-Users-Bob-Pictures" -p "123"
         ```
-- <span id="misc">Misc</span>
+- Misc
 
   - Options:
 
