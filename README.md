@@ -9,16 +9,25 @@
 - [Installation](#installation)
   - [Install from npm](#install-from-npm-node-package-manager)
     - [Requirements](#requirements)
-    - [Install Node.js LTS](#install-node.js-lts)
-        - [Already installed node/nvm](#already-installed-node/nvm)
+    - [Install Node.js LTS](#install-nodejs-lts)
+        - [Already installed node/nvm](#already-installed-nodenvm)
         - [Start from scratch](#start-from-scratch)
   - [Download Prebuilt Binary](#download-prebuilt-binary)
 - [Update](#update)
 - [Usage](#usage)
-  - [Configuration & Config Builder](#configuration-&-config-builder)
+  - [Configuration & Config Builder](#configuration-config-builder)
+    - [Config builder](#config-builder)
+    - [Configuration file](#configuration-file)
+    - [Path to `config.json`](#path-to-configjson)
   - [Backup](#backup)
-  - [Unpack & Decrypt](#unpack-&-decrypt)
+    - [Backup options](#backup-options)
+    - [Backup examples](#backup-examples)
+  - [Unpack & Decrypt](#unpack-decrypt)
+    - [Decrypt options](#decrypt-options)
+    - [Decrypt examples](#decrypt-examples)
   - [Misc](#misc)
+    - [Misc options](#misc-options)
+    - [Misc examples](#misc-examples)
 - [Changelog](#changelog)
 - [Todo](#todo)
 - [Meta](#meta)
@@ -111,7 +120,7 @@ npm update -g safe-backup
 ## Usage
 ### Configuration & Config Builder
 
-- #### Config Builder
+- #### Config builder
 
     If safe-backup is ran without parameters, it will try to recover configuration from last usage If no previous configuration is found, config builder will help you to build one without having to deal with these annoying parameters!
 
@@ -121,14 +130,14 @@ npm update -g safe-backup
 
     If you wish to update configuration, all you have to do is use your desired [backup parameters](#backup) in command line again or use [config builder](#misc) and it will overwrite the old configuration. You can even manually edit `config.json` if you know what you're doing.
 
-- #### Path to `config.json`:
+- #### Path to `config.json`
     - Linux: `/home/username/.config/safe-backup/config.json`
     - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
     - MacOS: `/Users/username/Library/Application Support/safe-backup/config.json`
 
 ### Backup
 
-  - #### Options:
+  - #### Backup options:
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
@@ -139,7 +148,7 @@ npm update -g safe-backup
     |--save-password| -s  | `true`  |`boolean`             |  Save password to the system. Default is `true`    |
 
 
-  - #### Examples
+  - #### Backup examples
 
     Backup one directory to another in watch mode and disable save password:
     ```sh
@@ -162,14 +171,14 @@ npm update -g safe-backup
 
   If `--password` is not specified, it will prompt for password (which is recommended, you should never use password in command line).
 
-  - #### Options:
+  - #### Decrypt options
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
     |--decrypt      | -d  | `false` |`string`              | Absolute path of encrypted file to decrypt         |
     |--password     | -p  | `true`  |`string`              | Password for decryption (not recommended)          |
 
-  - #### Examples
+  - #### Decrypt examples
 
     Decrypt a previous encrypted file:
     ```sh
@@ -181,7 +190,7 @@ npm update -g safe-backup
     ```
 ### Misc
 
-  - #### Options:
+  - #### Misc options
 
     | Parameter     |Alias| Value             | Description                                        |
     |---------------|:---:|:-----------------:|:--------------------------------------------------:|
@@ -197,7 +206,7 @@ npm update -g safe-backup
     |--export-key   |`n/a`|`null` \| `string` | Export current key                                 |
     |--import-key   |`n/a`|`string`           | Import previously generated key                    |
 
-  - #### Examples
+  - #### Misc examples
 
     Export current configuration to current cwd (current working directory):
     ```sh
