@@ -22,7 +22,7 @@
   - [Backup](#backup)
     - [Backup options](#backup-options)
     - [Backup examples](#backup-examples)
-  - [Unpack & Decrypt](#unpack-decrypt)
+  - [Unpack & Decrypt](#unpack--decrypt)
     - [Decrypt options](#decrypt-options)
     - [Decrypt examples](#decrypt-examples)
   - [Misc](#misc)
