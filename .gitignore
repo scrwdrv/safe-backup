@@ -103,7 +103,6 @@ dist
 # TernJS port file
 .tern-port
 
-assets
 config.json
 key.safe
 test.*

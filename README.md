@@ -4,6 +4,28 @@
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 
+## Features
+
+- Backup your sensitive file in the safest way
+  - Use `AES-256-CTR` for encryption, and `RSA-4096` for storing cipher key
+  - Password is salted and hashed, never store/use a plain password
+  - No way to decrypt without having the exact password
+  - Even hacker somehow obtained `key.safe` file with password hash inside (set `savePassword` to `false` then no one can ever crack it), there is no way to crack it without knowing the source code
+
+- Easy & powerful at the same time
+  - Support both file and folder
+  - Exclude files and folders with regular expression
+  - Real-time monitoring file changes and synchronize modified ones
+  - Pack complicate directory into a single file, easier to transport
+  - Cross platform friendly, tested on Linux, Windows & MacOS
+  - Original config & key pair is NOT needed for decryption, unpack your file on any devices
+  - [Config builder](#config-builde) to spare you from annoying parameters
+
+- Highly optimized on speed
+  - Created a whole new packaging format just for performance
+  - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
+  - Run in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -35,79 +57,80 @@
 
 ## Installation
 
-- ### Install from [npm](https://www.npmjs.com/package/safe-backup) (node package manager)
+### Install from [npm](https://www.npmjs.com/package/safe-backup) (node package manager)
 
-  *You can skip this section to [install safe-backup](#install-safe-backup) if you're quite familiar with Node.*
-    - ### Requirements
-        - Node.js v11.6.0+
-        - npm (included by Node.js nowadays)
-        - nvm (optional)
+*You can skip this section to [install safe-backup](#install-safe-backup) if you're quite familiar with Node.*
 
-    1. ### Install Node.js LTS
+- ### Requirements
+    - Node.js v11.6.0+
+    - npm (included by Node.js nowadays)
+    - nvm (optional)
 
-        - #### Already installed node/nvm
+1. ### Install Node.js LTS
 
-            If you have installed Node.js before, you can use `node -v` to check the version you have installed, if is outdated: 
-            ```sh
-            nvm list
-            #    12.10.0
-            #  * 8.9.4
-            #    8.2.1
+    #### Already installed node/nvm
 
-            nvm use 12.10.0
-            ```
-            If you don't have v11.6.0+ installed on nvm:
-            ```sh
-            nvm install --lts
-            nvm use --lts
-            ```
+    If you have installed Node.js before, you can use `node -v` to check the version you have installed, if is outdated: 
+    ```sh
+    nvm list
+    #    12.10.0
+    #  * 8.9.4
+    #    8.2.1
 
-        - #### Start from scratch
-        
-            For those who have never deal with Node.js before, it is recommended to use [nvm](https://github.com/nvm-sh/nvm) (node version manager) so you can have multiple versions of Node and switch to another version as you like. It's available on both Linux & Windows.
+    nvm use 12.10.0
+    ```
+    If you don't have v11.6.0+ installed on nvm:
+    ```sh
+    nvm install --lts
+    nvm use --lts
+    ```
 
-            - For Linux (Ubuntu, Debian, RedHat, etc.)
+    #### Start from scratch
 
-                Install cURL to download installation script
-                ```
-                sudo apt update
-                sudo apt install curl
-                ``` 
-                Install nvm & node (default is LTS)
-                ```sh
-                curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.2/install.sh | bash
-                nvm install node
-                node -v 
-                # 12.14.1
-                ```
-                If you ran into some errors like `Command 'node' not found, ...`, try to reload your path variable:
-                ```sh
-                source ~/.bashrc
-                ```
-            - For Windows
+    For those who have never deal with Node.js before, it is recommended to use [nvm](https://github.com/nvm-sh/nvm) (node version manager) so you can have multiple versions of Node and switch to another version as you like. It's available on both Linux & Windows.
 
-                Use [nvm-windows](https://github.com/coreybutler/nvm-windows) created by coreybutler instead, a quick setup executable could be found at [release page](https://github.com/coreybutler/nvm-windows/releases). 
-                
-                After you have installed nvm and added to $PATH (which should be done automatically, **restart terminal** might be required):
-                ```sh
-                nvm install node
-                node -v 
-                # 12.14.1
-                ```
+    - For Linux (Ubuntu, Debian, RedHat, etc.)
 
-    2. ### Install safe-backup
-        Install safe-backup globally is recommended, so you can use it directly by calling `safe-backup` at the terminal.
+        Install cURL to download installation script
+        ```
+        sudo apt update
+        sudo apt install curl
+        ``` 
+        Install nvm & node (default is LTS)
         ```sh
-        npm i -g safe-backup
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.35.2/install.sh | bash
+        nvm install node
+        node -v 
+        # 12.14.1
+        ```
+        If you ran into some errors like `Command 'node' not found, ...`, try to reload your path variable:
+        ```sh
+        source ~/.bashrc
+        ```
+    - For Windows
+
+        Use [nvm-windows](https://github.com/coreybutler/nvm-windows) created by coreybutler instead, a quick setup executable could be found at [release page](https://github.com/coreybutler/nvm-windows/releases). 
+        
+        After you have installed nvm and added to $PATH (which should be done automatically, **restart terminal** might be required):
+        ```sh
+        nvm install node
+        node -v 
+        # 12.14.1
         ```
 
-- ### Download Prebuilt Binary
+2. ### Install safe-backup
+    Install safe-backup globally is recommended, so you can use it directly by calling `safe-backup` at the terminal.
+    ```sh
+    npm i -g safe-backup
+    ```
 
-    This way is recommended for people just want to use it on the fly. Download and execute, that's how simple it is. You don't have to install or build any environment for safe-backup to run, a full Node.js binary based on your operating platform is built-in.
+### Download Prebuilt Binary
 
-    Executable binary is built by [pkg](https://github.com/zeit/pkg), which is a great tool to pack your Node.js app into a single executable and run on devices without Node.js installed.
+This way is recommended for people just want to use it on the fly. Download and execute, that's how simple it is. You don't have to install or build any environment for safe-backup to run, a full Node.js binary based on your operating platform is built-in.
 
-    Currently support Linux, Windows & MacOS, all have been tested. To download latest Safe Backup binary and check out release notes, please head to [release page](https://github.com/scrwdrv/safe-backup/releases).
+Executable binary is built by [pkg](https://github.com/zeit/pkg), which is a great tool to pack your Node.js app into a single executable and run on devices without Node.js installed.
+
+Currently support Linux, Windows & MacOS, all have been tested. To download latest Safe Backup binary and check out release notes, please head to [release page](https://github.com/scrwdrv/safe-backup/releases).
 
 
 ## Update
