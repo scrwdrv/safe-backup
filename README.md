@@ -1,5 +1,5 @@
 # Safe Backup
-> A real-time backup CLI tool written in Typescript. safe-back helps you sync file/folder into a single password encrypted storage. Using technology of RSA & AES.
+> A real-time backup CLI tool written in Typescript. Safe Backup helps you sync file/folder into a single password encrypted storage. Using technology of RSA & AES.
 
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
@@ -61,7 +61,7 @@
 
 ### Install from [npm](https://www.npmjs.com/package/safe-backup) (node package manager)
 
-*You can skip this section to [install safe-backup](#install-safe-backup) if you're quite familiar with Node.*
+*You can skip this section to [Install Safe Backup](#install-safe-backup) if you're quite familiar with Node.*
 
 - ### Requirements
     - Node.js v11.6.0+
@@ -120,7 +120,7 @@
         # 12.14.1
         ```
 
-2. ### Install safe-backup
+2. ### Install Safe Backup
     Install safe-backup globally is recommended, so you can use it directly by calling `safe-backup` at the terminal.
     ```sh
     npm i -g safe-backup
@@ -132,7 +132,7 @@ This way is recommended for people just want to use it on the fly. Download and 
 
 Executable binary is built by [pkg](https://github.com/zeit/pkg), which is a great tool to pack your Node.js app into a single executable and run on devices without Node.js installed.
 
-Currently support Linux, Windows & MacOS, all have been tested. To download latest Safe Backup binary and check out release notes, please head to [release page](https://github.com/scrwdrv/safe-backup/releases).
+Currently support Linux, Windows & MacOS, all have been tested. To download latest safe-backup binary and check out release notes, please head to [release page](https://github.com/scrwdrv/safe-backup/releases).
 
 
 ## Update
