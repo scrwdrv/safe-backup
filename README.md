@@ -4,6 +4,26 @@
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 
+## Table of Contents
+
+- ### [Installation](#installation)
+  - #### [Install from npm](#install-from-npm-node-package-manager)
+    - [Requirements](#requirements)
+    - [Install Node.js LTS](#install-node.js-lts)
+       - [Already installed node/nvm](#already-installed-node/nvm)
+       - [Start from scratch](#start-from-scratch)
+  - #### [Download Prebuilt Binary](#download-prebuilt-binary)
+- ### [Update](#update)
+- ### [Usage](#usage)
+  - #### [Configuration & Config Builder](#configuration-&-config-builder)
+  - #### [Backup](#backup)
+  - #### [Unpack & Decrypt](#unpack-&-decrypt)
+  - #### [Misc](#misc)
+  
+- ### [Changelog](#changelog)
+- ### [Todo](#todo)
+- ### [Meta](#meta)
+- ### [Contributing](#contributing)
 
 ## Installation
 
@@ -38,7 +58,7 @@
         
             For those who have never deal with Node.js before, it is recommended to use [nvm](https://github.com/nvm-sh/nvm) (node version manager) so you can have multiple versions of Node and switch to another version as you like. It's available on both Linux & Windows.
 
-            - For Linux
+            - For Linux (Ubuntu, Debian, RedHat, etc.)
 
                 Install cURL to download installation script
                 ```
@@ -86,30 +106,30 @@
 ```sh
 npm update -g safe-backup
 ```
-Update safe-backup by `npm update` is only available for those who install with npm. For binary users, download new version of binary at [release page](https://github.com/scrwdrv/safe-backup/releases) and replace it manually. You don't need to worry about losing your configuration or have your password reset, those files are saved at different directory based on your OS.
+>Update safe-backup by `npm update` is only available for those who install with npm. For binary users, download new version of binary at [release page](https://github.com/scrwdrv/safe-backup/releases) and replace it manually. You don't need to worry about losing your configuration or have your password reset, those files are saved at different directory based on your OS.
 
 
 ## Usage
- - Configuration & Config Builder
+### Configuration & Config Builder
 
-   - Config Builder
+- #### Config Builder
 
-        If safe-backup is ran without parameters, it will try to recover configuration from last usage If no previous configuration is found, config builder will help you to build one without having to deal with these annoying parameters!
+    If safe-backup is ran without parameters, it will try to recover configuration from last usage If no previous configuration is found, config builder will help you to build one without having to deal with these annoying parameters!
 
-   - Configuration file 
+- #### Configuration file 
 
-        `config.json` will be generated automatically at system AppData path based on your OS when initialized. So the next time you open safe-backup there is no need to reconfigure the whole thing again. 
+    `config.json` will be generated automatically at system AppData path based on your OS when initialized. So the next time you open safe-backup there is no need to reconfigure the whole thing again. 
 
-        If you wish to update configuration, all you have to do is use your desired [backup parameters](#backup) in command line again or use [config builder](#misc) and it will overwrite the old configuration. You can even manually edit `config.json` if you know what you're doing.
+    If you wish to update configuration, all you have to do is use your desired [backup parameters](#backup) in command line again or use [config builder](#misc) and it will overwrite the old configuration. You can even manually edit `config.json` if you know what you're doing.
 
-    - Path to `config.json`:
-        - Linux: `/home/username/.config/safe-backup/config.json`
-        - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
-        - MacOS: `/Users/username/Library/Application Support/safe-backup/config.json`
+- #### Path to `config.json`:
+    - Linux: `/home/username/.config/safe-backup/config.json`
+    - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
+    - MacOS: `/Users/username/Library/Application Support/safe-backup/config.json`
 
-- Backup
+### Backup
 
-  - Options:
+  - #### Options:
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
@@ -120,49 +140,49 @@ Update safe-backup by `npm update` is only available for those who install with 
     |--save-password| -s  | `true`  |`boolean`             |  Save password to the system. Default is `true`    |
 
 
-  - Examples
+  - #### Examples
 
-    - Backup one directory to another in watch mode and disable save password
-        ```sh
-        safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -w -s false
-        ```
-    - Mutiple input & output
-        ```sh
-        safe-backup -i "C:\Users\Bob\Pictures" "C:\Users\Bob\Videos" -o "D:\Backup" "F:\Backup" 
-        ```
-    - Path contains spaces
-        ```sh
-        safe-backup -i "C:\Users\Bob\Hello World.txt" -o "D:\Backup Destination"
-        ```
-    - Exclude path with [regular expression](https://en.wikipedia.org/wiki/Regular_expression)
-        ```sh
-        safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -I "/^2018-/" "/.+\.tif$/i"
-        ```
+    Backup one directory to another in watch mode and disable save password:
+    ```sh
+    safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -w -s false
+    ```
+    Mutiple input & output:
+    ```sh
+    safe-backup -i "C:\Users\Bob\Pictures" "C:\Users\Bob\Videos" -o "D:\Backup" "F:\Backup" 
+    ```
+    Path contains spaces:
+    ```sh
+    safe-backup -i "C:\Users\Bob\Hello World.txt" -o "D:\Backup Destination"
+    ```
+    Exclude path with [regular expression](https://en.wikipedia.org/wiki/Regular_expression):
+    ```sh
+    safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -I "/^2018-/" "/.+\.tif$/i"
+    ```
 
-- Unpack & Decrypt
+### Unpack & Decrypt
 
   If `--password` is not specified, it will prompt for password (which is recommended, you should never use password in command line).
 
-  - Options:
+  - #### Options:
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
     |--decrypt      | -d  | `false` |`string`              | Absolute path of encrypted file to decrypt         |
     |--password     | -p  | `true`  |`string`              | Password for decryption (not recommended)          |
 
-  - Examples
+  - #### Examples
 
-      - Decrypt a previous encrypted file
-        ```sh
-        safe-backup -d "D:\Backup\C-Users-Bob-Pictures"
-        ```
-      - Decrypt a previous encrypted file with password in command line (not recommended)
-        ```sh
-        safe-backup -d "D:\Backup\C-Users-Bob-Pictures" -p "123"
-        ```
-- Misc
+    Decrypt a previous encrypted file:
+    ```sh
+    safe-backup -d "D:\Backup\C-Users-Bob-Pictures"
+    ```
+    Decrypt a previous encrypted file with password in command line (not recommended):
+    ```sh
+    safe-backup -d "D:\Backup\C-Users-Bob-Pictures" -p "123"
+    ```
+### Misc
 
-  - Options:
+  - #### Options:
 
     | Parameter     |Alias| Value             | Description                                        |
     |---------------|:---:|:-----------------:|:--------------------------------------------------:|
@@ -178,16 +198,16 @@ Update safe-backup by `npm update` is only available for those who install with 
     |--export-key   |`n/a`|`null` \| `string` | Export current key                                 |
     |--import-key   |`n/a`|`string`           | Import previously generated key                    |
 
-  - Examples
+  - #### Examples
 
-      - Export current configuration to current cwd (current working directory)
-        ```sh
-        safe-backup --export-config
-        ```
-      - Import key from previously generated `key.safe` file
-        ```sh
-        safe-backup --import-key "./keys/key.safe"
-        ```
+    Export current configuration to current cwd (current working directory):
+    ```sh
+    safe-backup --export-config
+    ```
+    Import key from previously generated `key.safe` file:
+    ```sh
+    safe-backup --import-key "./keys/key.safe"
+    ```
 
 ## Changelog
 - v1.3.12
@@ -223,12 +243,12 @@ Update safe-backup by `npm update` is only available for those who install with 
   - Add [cliParams](https://github.com/scrwdrv/cli-params) to parse arguments
 
 
-## ToDo
-- Plain backup (no packing and encryption)
-- Benchmark
-- Allow multiple files to decrypt at once
-- Unpacked files to have original stats (mtime, permission, etc.)
-- GUI (not very useful to me though)
+## Todo
+- [ ] Plain backup (no packing and encryption)
+- [ ] Benchmark
+- [ ] Allow multiple files to decrypt at once
+- [ ] Unpacked files to have original stats (mtime, permission, etc.)
+- [ ] GUI (not very useful to me though)
 
 ## Meta
 
