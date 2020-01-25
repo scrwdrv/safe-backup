@@ -157,7 +157,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 
     If you wish to update configuration, all you have to do is use your desired [backup parameters](#backup) in command line again or use [config builder](#misc) and it will overwrite the old configuration. You can even manually edit `config.json` if you know what you're doing.
 
-    Here is an example that how configuration file looks like:
+    Here is an example of how configuration file looks like:
     
     ```json
     {
