@@ -249,6 +249,9 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.3.17
+  - Allow multiple files to decrypt at once
+  - Remove abs path check on decryption since it's meaningless
 - v1.3.16
   - Add basic documentation
   - Print version & github repo at startup
