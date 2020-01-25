@@ -168,11 +168,11 @@ Update safe-backup by `npm update` is only available for those who install with 
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
-    |--input        | -i  | `false` |`string` \| `strings` | Absolute path(s) of folder/file to backup          |
-    |--output       | -o  | `false` |`string` \| `strings` | Absolute path(s) of folder to store encrypted file |
+    |--input        | -i  | `false` |`string` \| `strings` | Absolute paths of folders/files to backup          |
+    |--output       | -o  | `false` |`string` \| `strings` | Absolute paths of folders to store encrypted files |
     |--watch        | -w  | `true`  |`number` \| `null`    | Enable watch mode. Default check interval is `60`  |
-    |--ignore       | -I  | `true`  |`string` \| `strings` | Add ignore rule(s) with regex                      |
-    |--save-password| -s  | `true`  |`boolean`             |  Save password to the system. Default is `true`    |
+    |--ignore       | -I  | `true`  |`string` \| `strings` | Add ignore rules with regex                        |
+    |--save-password| -s  | `true`  |`boolean`             | Save password to the system. Default is `true`     |
 
 
   - #### Backup examples
@@ -202,7 +202,7 @@ Update safe-backup by `npm update` is only available for those who install with 
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
-    |--decrypt      | -d  | `false` |`string` \| `strings` | Path of encrypted files to decrypt                 |
+    |--decrypt      | -d  | `false` |`string` \| `strings` | Paths of encrypted files to decrypt               |
     |--password     | -p  | `true`  |`string`              | Password for decryption (not recommended)          |
 
   - #### Decrypt examples
