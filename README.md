@@ -10,25 +10,25 @@
 
 ## Features
 
-- Backup your sensitive file in the safest way
+- Backup your sensitive files in the safest way possible
   - Use `AES-256-CTR` for encryption, and `RSA-4096` for storing cipher key
   - Password is salted and hashed, never store/use a plain password
-  - No way to decrypt without having the exact password
+  - No way to decrypt in hundreds of years without having the exact password
   - Even hacker somehow obtained `key.safe` file with password hash inside (set `savePassword` to `false` then no one can ever crack it), there is no way to crack it without knowing the source code
 
 - Easy & powerful at the same time
   - Support both file and folder
   - Exclude files and folders with regular expression
-  - Real-time monitoring file changes and synchronize modified ones
-  - Pack complicate directory into a single file, easier to transport
+  - Real-time monitoring files changes and synchronize modified ones
+  - Pack complicate directories into a single file, easier to transport
   - Cross platform friendly, tested on Linux, Windows & MacOS
-  - Original config & key pair is NOT needed for decryption, unpack your file on any devices
+  - Original config & key pair is NOT needed for decryption, unpack & decrypt your files on any devices
   - [Config builder](#config-builder) to spare you from annoying parameters
 
 - Highly optimized on speed
   - Created a whole new packaging format just for performance
   - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
-  - Run in [cluster](https://nodejs.org/api/cluster.html){:target="_blank"}, unleash the full power of multi-core processor
+  - Runs in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
 
 ## Table of Contents
 
@@ -157,6 +157,27 @@ Update safe-backup by `npm update` is only available for those who install with 
 
     If you wish to update configuration, all you have to do is use your desired [backup parameters](#backup) in command line again or use [config builder](#misc) and it will overwrite the old configuration. You can even manually edit `config.json` if you know what you're doing.
 
+    Here is an example that how configuration file looks like:
+    
+    ```json
+    {
+        "input": [
+            "C:\\Users\\Bob\\Pictures",
+            "C:\\Users\\Bob\\Videos"
+        ],
+        "output": [
+            "D:\\Backup",
+            "F:\\Backup" 
+        ],
+        "watch": 120,
+        "savePassword": false,
+        "ignore": [
+            "/^2018-/",
+            "/.+\\.tif$/i"
+        ]
+    }
+    ```
+
 - #### Path to `config.json`
     - Linux: `/home/username/.config/safe-backup/config.json`
     - Windows: `C:\Users\username\AppData\Roaming\safe-backup\config.json`
@@ -177,9 +198,9 @@ Update safe-backup by `npm update` is only available for those who install with 
 
   - #### Backup examples
 
-    Backup one directory to another in watch mode and disable save password:
+    Backup one directory to another in watch mode (check every 120 secs) and disable save password:
     ```sh
-    safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -w -s false
+    safe-backup -i "C:\Users\Bob\Pictures" -o "D:\Backup" -w 120 -s false
     ```
     Mutiple input & output:
     ```sh
