@@ -26,7 +26,7 @@
   - [Config builder](#config-builder) to spare you from annoying parameters
 
 - Highly optimized on speed
-  - Created a whole new packaging format just for performance
+  - Created a whole new archive format just for performance
   - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
   - Runs in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
 
