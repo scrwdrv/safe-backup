@@ -202,7 +202,7 @@ Update safe-backup by `npm update` is only available for those who install with 
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
-    |--decrypt      | -d  | `false` |`string`              | Absolute path of encrypted file to decrypt         |
+    |--decrypt      | -d  | `false` |`string` \| `strings` | Path of encrypted files to decrypt                 |
     |--password     | -p  | `true`  |`string`              | Password for decryption (not recommended)          |
 
   - #### Decrypt examples
@@ -210,6 +210,10 @@ Update safe-backup by `npm update` is only available for those who install with 
     Decrypt a previous encrypted file:
     ```sh
     safe-backup -d "D:\Backup\C-Users-Bob-Pictures"
+    ```
+    Decrypt mutiple encrypted files:
+    ```sh
+    safe-backup -d "D:\Backup\C-Users-Bob-Pictures" "C:\Users\Bob\Videos"
     ```
     Decrypt a previous encrypted file with password in command line (not recommended):
     ```sh
@@ -285,7 +289,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 ## Todo
 - [ ] Plain backup (no packing and encryption)
 - [ ] Benchmark
-- [ ] Allow multiple files to decrypt at once
+- [x] Allow multiple files to decrypt at once
 - [ ] Unpacked files to have original stats (mtime, permission, etc.)
 - [ ] GUI (not very useful to me though)
 

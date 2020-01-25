@@ -91,7 +91,7 @@ Options:
                         so unchanged files don't need to be re-encrypt (a lot more faster).
                         This parameter set to true by default.
 
-    -d --decrypt        Absolute path of encrypted file to decrypt.
+    -d --decrypt        Path of encrypted file to decrypt.
     -p --password       Password for decryption (not recommended to use password in command line).
 
     -h --help           Show this screen.
