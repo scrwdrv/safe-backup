@@ -293,7 +293,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 - v1.2.2
   - Fix `bytesLength !== length`
 - v1.2.1
-  - Migrate from Tar to custom packaging format (much faster)
+  - Migrate from Tar to custom archive format (much faster)
 - v1.2.0
   - Store key to appdata
   - Add export & import key
