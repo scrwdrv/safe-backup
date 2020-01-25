@@ -300,7 +300,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 
 scrwdrv @ scrwdrv.tech@gmail.com
 
-Distributed under the MIT license. See ``LICENSE`` for more information.
+Distributed under the MIT license. See [`LICENSE`](https://github.com/scrwdrv/safe-backup/blob/master/LICENSE) for more information.
 
 
 ## Contributing
