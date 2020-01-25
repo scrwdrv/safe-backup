@@ -28,7 +28,7 @@
 - Highly optimized on speed
   - Created a whole new packaging format just for performance
   - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
-  - Run in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
+  - Run in [cluster](https://nodejs.org/api/cluster.html){:target="_blank"}, unleash the full power of multi-core processor
 
 ## Table of Contents
 
