@@ -4,7 +4,8 @@
   "description": "A real-time backup CLI tool written in Typescript. Safe Backup helps you sync file/folder into a single password encrypted storage. Using technology of RSA & AES.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "build:watch": "tsc --watch"
   },
   "bin": {
     "safe-backup": "./index.js"
