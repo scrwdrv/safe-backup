@@ -147,8 +147,7 @@ let config: Config = {} as any,
         if (semver.gt('11.6.0', process.version))
             return log.warn(`Node.js v11.6.0 or higher version is required for safe-backup, please update your Node.js`), exit();
 
-        for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
-            forkWorker((i + 1).toString());
+        forkWorkers();
 
         let promises: Promise<void>[] = [];
 
@@ -183,7 +182,7 @@ let config: Config = {} as any,
 })();
 
 function parseParams() {
-    return new Promise<void>((resolve, reject) =>
+    return new Promise<void>((resolve, quit) =>
         new CLIParams()
             .add({
                 params: [
@@ -221,7 +220,7 @@ function parseParams() {
                 params: [
                     {
                         param: 'decrypt',
-                        type: 'string',
+                        type: 'array-of-string',
                         alias: 'd'
                     }, {
                         param: 'password',
@@ -319,7 +318,7 @@ function parseParams() {
             .exec(async (err, args, id) => {
                 if (err)
                     if (process.argv.length === 2) log.info('No parameters were found, restoring configuration...'), resolve();
-                    else return console.log(err), console.log(helpText), reject();
+                    else return console.log(err), console.log(helpText), quit();
                 else switch (id) {
                     case 'regular':
                         config.input = args.input;
@@ -331,45 +330,39 @@ function parseParams() {
                             for (let i = args.ignore.length; i--;) {
                                 if (regex.isRegex(args.ignore[i]))
                                     config.ignore.push(args.ignore[i]);
-                                else return log.error(`Invalid regex [${args.ignore[i]}]`), reject();
+                                else return log.error(`Invalid regex [${args.ignore[i]}]`), quit();
                             }
                         resolve();
                         break;
                     case 'decrypt':
-                        if (!PATH.isAbsolute(args.decrypt)) return log.error(`Path must be absolute [${formatPath(args.decrypt)}]`), reject();
-                        const t = Date.now();
-                        forkWorker('1').sendJob('decrypt', {
-                            input: args.decrypt,
-                            passwordHash: hashPassword(args.password ? args.password : await prompt.questions.getPassword()).toString('hex')
-                        }, (err) => {
-                            if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(args.decrypt)}]`);
-                            else {
-                                const decrypt = PATH.parse(args.decrypt);
-                                log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(args.decrypt)}]`);
-                                log.info(`Your decrypted file/folder can be found at ${PATH.join(decrypt.dir, decrypt.name)}`);
-                            }
-                            reject();
-                        });
+                        const password = hashPassword(args.password ? args.password : await prompt.questions.getPassword()).toString('hex');
+
+                        forkWorkers();
+
+                        Promise.all((<string[]>args.decrypt).map(p => decrypt({
+                            input: p,
+                            passwordHash: password
+                        }))).then(() => quit());
                         break;
                     case 'help':
                         console.log(helpText);
-                        reject();
+                        quit();
                         break;
                     case 'version':
-                        reject();
+                        quit();
                         break;
                     case 'config':
                         handleConfig().then(() => {
                             console.log(prettyJSON(config));
                             config = {} as any;
-                            reject();
+                            quit();
                         }).catch(err => {
                             console.log(`No configuration file is found`);
-                            reject();
+                            quit();
                         });
                         break;
                     case 'build-config':
-                        await askQuestions().catch(reject);
+                        await askQuestions().catch(quit);
                         resolve();
                         break;
                     case 'reset-config':
@@ -379,9 +372,9 @@ function parseParams() {
                                     if (err.code === 'ENOENT') console.log('There is no config.json');
                                     else log.debug(err), console.log('Failed to delete config.json');
                                 else console.log('config.json deleted');
-                                reject();
+                                quit();
                             });
-                        else reject();
+                        else quit();
                         break;
                     case 'reset-key':
                         if (await prompt.questions.getYn(`Are you sure you wanna reset your key [Y/N]?`))
@@ -390,66 +383,66 @@ function parseParams() {
                                     if (err.code === 'ENOENT') console.log('There is no key');
                                     else log.debug(err), console.log('Failed to delete key.safe');
                                 else console.log('key deleted');
-                                reject();
+                                quit();
                             });
-                        else reject();
+                        else quit();
                         break;
                     case 'log':
                         console.log(PATH.join(appDataPath, 'logs'))
-                        reject();
+                        quit();
                         break;
                     case 'export-key':
                         fs.readFile(PATH.join(appDataPath, 'key.safe'), 'utf8', (err, data) => {
-                            if (err) return log.debug(err), console.log('Key pair not found'), reject();
+                            if (err) return log.debug(err), console.log('Key pair not found'), quit();
                             fs.writeFile(args['export-key'], data, (err) => {
                                 if (err) log.debug(err), console.log('Failed to export key');
                                 else console.log(`Key exported to ${PATH.resolve(args['export-key'])}`);
-                                reject();
+                                quit();
                             });
                         });
                         break;
                     case 'import-key':
                         fs.readFile(args['import-key'], (err, data) => {
-                            if (err) return log.debug(err), console.log(`Key pair not found at ${PATH.resolve(args['import-key'])}`), reject();
+                            if (err) return log.debug(err), console.log(`Key pair not found at ${PATH.resolve(args['import-key'])}`), quit();
                             try {
                                 keys = decryptSafe(data);
                                 if (!keys.public || !keys.encryptedPrivate) throw null;
                                 fs.writeFile(PATH.join(appDataPath, 'key.safe'), data, (err) => {
                                     if (err) log.debug(err), console.log('Failed to import key');
                                     else console.log(`Key imported`);
-                                    reject();
+                                    quit();
                                 });
                             } catch (err) {
                                 console.log(`Invalid key pair`);
-                                reject();
+                                quit();
                             }
                         })
                         break;
                     case 'export-config':
                         fs.readFile(PATH.join(appDataPath, 'config.json'), 'utf8', (err, data) => {
-                            if (err) return log.debug(err), console.log('Configuration not found'), reject();
+                            if (err) return log.debug(err), console.log('Configuration not found'), quit();
                             fs.writeFile(args['export-config'], data, (err) => {
                                 if (err) log.debug(err), console.log('Failed to export configuration');
                                 else console.log(`Configuration exported to ${PATH.resolve(args['export-config'])}`);
-                                reject();
+                                quit();
                             });
                         });
                         break;
                     case 'import-config':
                         fs.readFile(args['import-config'], 'utf8', (err, data) => {
-                            if (err) return log.debug(err), console.log(`Configuration not found at ${PATH.resolve(args['import-config'])}`), reject();
+                            if (err) return log.debug(err), console.log(`Configuration not found at ${PATH.resolve(args['import-config'])}`), quit();
                             try {
                                 config = JSON.parse(data)
                                 if (configValidator(config))
                                     fs.writeFile(PATH.join(appDataPath, 'config.json'), data, (err) => {
                                         if (err) log.debug(err), console.log('Failed to import configuration');
                                         else console.log(`Configuration imported`);
-                                        reject();
+                                        quit();
                                     });
                                 else throw null;
                             } catch (err) {
                                 console.log(`Invalid configuration`);
-                                reject();
+                                quit();
                             }
                         })
                         break;
@@ -588,6 +581,11 @@ function getPassword() {
     });
 }
 
+function forkWorkers() {
+    for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
+        forkWorker((i + 1).toString());
+}
+
 function forkWorker(id: string) {
     const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
 
@@ -600,6 +598,31 @@ function forkWorker(id: string) {
 
     workers.push(worker);
     return worker;
+}
+
+function getWokrer() {
+    const worker = workers.shift();
+    workers.push(worker);
+    return worker;
+}
+
+function decrypt(options: DecryptOptions) {
+    return new Promise<void>(resolve => {
+        const worker = getWokrer(),
+            t = Date.now();
+        running.push(worker.id);
+        worker.sendJob('decrypt', options, (err, bytes, mods) => {
+            if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(options.input)}]`);
+            else {
+                const decrypt = PATH.parse(options.input);
+                log.info(`Decrypted, duration: ${formatSec(Date.now() - t)}s [${formatPath(options.input)}]`);
+                log.info(`Your decrypted file/folder can be found at ${PATH.join(decrypt.dir, decrypt.name)}`);
+            }
+            const index = running.indexOf(worker.id);
+            if (index > -1) running.splice(index, 1);
+            resolve();
+        });
+    });
 }
 
 function backup(options: BackupOptions) {
@@ -616,12 +639,6 @@ function backup(options: BackupOptions) {
             resolve();
         });
     });
-
-    function getWokrer() {
-        const worker = workers.shift();
-        workers.push(worker);
-        return worker;
-    }
 }
 
 function backupDaemon(input: string) {
