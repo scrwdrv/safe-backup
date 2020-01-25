@@ -3,6 +3,8 @@
 
 [![npm](https://img.shields.io/npm/v/safe-backup.svg)](https://npmjs.org/package/safe-backup)
 [![downloads](https://img.shields.io/npm/dm/safe-backup.svg)](https://npmjs.org/package/safe-backup)
+[![travis](https://img.shields.io/travis/scrwdrv/safe-backup/master.svg)](https://travis-ci.org/scrwdrv/safe-backup)
+
 
 ![safe-backup-preview](https://github.com/scrwdrv/safe-backup/blob/master/assets/preview.png?raw=true)
 
