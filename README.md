@@ -273,7 +273,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 - v1.3.18
   - `archive` is now a new module named [bua](https://github.com/scrwdrv/bua)
   - Restore original stats (mtime, permission, etc.) when unpacking
-  - <span style="color:red">NOTICE:</span> Added `mode` to bua header, not compatible with encrypted files generate by previous version
+  - **NOTICE:** Added `mode` to bua header, not compatible with encrypted files generate by previous version
 - v1.3.17
   - Allow multiple files to decrypt at once
   - Remove abs path check on decryption since it's meaningless
