@@ -36,7 +36,8 @@
     "decrypt",
     "cli",
     "tool",
-    "typescript"
+    "typescript",
+    "bua"
   ],
   "author": "scrwdrv",
   "license": "MIT",
