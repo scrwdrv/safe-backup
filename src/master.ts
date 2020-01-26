@@ -145,7 +145,7 @@ let config: Config = {} as any,
         else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
 
         if (semver.gt('11.6.0', process.version))
-            return log.warn(`Node.js v11.6.0 or higher version is required for safe-backup, please update your Node.js`), exit();
+            return log.warn(`Node.js v11.6.0 or greater is required for safe-backup, please update your Node.js`), exit();
 
         forkWorkers();
 
