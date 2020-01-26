@@ -59,6 +59,7 @@
     "worker-communication": "^1.0.8"
   },
   "devDependencies": {
-    "@types/node": "^13.1.8"
+    "@types/node": "^13.1.8",
+    "@types/semver": "^6.2.0"
   }
 }
