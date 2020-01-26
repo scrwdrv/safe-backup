@@ -1,12 +1,12 @@
 import * as regex from 'simple-regex-toolkit';
 import getAppDataPath from 'appdata-path';
 import CPC from 'worker-communication';
-import * as archive from './archive';
 import Logger from 'colorful-log';
 import { Writable } from 'stream';
 import * as crypto from 'crypto';
 import { platform } from 'os';
 import * as PATH from 'path';
+import * as bua from 'bua';
 import * as fs from 'fs';
 
 process.on('SIGINT', () => { });
@@ -51,23 +51,35 @@ cpc.onMaster('saveLog', async (req, res) => {
             key = crypto.privateDecrypt(privateKey, head.encryptedKey),
             input = PATH.parse(req.input),
             output = PATH.join(input.dir, input.name),
-            extract = new archive.Extract();
+            extract = new bua.Extract();
 
-        extract.onEntry((header, stream, next) => {
-
+        extract.entry((header, stream, next) => {
             if (header.type === 'file')
                 if (head.isFile)
                     stream
                         .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
-                        .pipe(fs.createWriteStream(output, { mode: 0o644 })).on('finish', next)
-
+                        .pipe(fs.createWriteStream(output, { mode: header.mode || 0o644 })).on('finish', () =>
+                            utimes(output, (err) => {
+                                if (err) return next(err);
+                                next();
+                            })
+                        );
                 else {
-                    const index = header.name.lastIndexOf('/');
-                    mkdir(header.name.slice(0, index === -1 ? 0 : index), (err) => {
+                    const index = header.name.lastIndexOf('/'),
+                        path = PATH.join(output, header.name),
+                        dirName = header.name.slice(0, index === -1 ? 0 : index),
+                        dirPath = PATH.join(output, dirName);
+
+                    mkdir(dirPath, dirName, (err) => {
                         if (err) return next(err);
                         stream
                             .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
-                            .pipe(fs.createWriteStream(PATH.join(output, header.name), { mode: 0o644 })).on('finish', next)
+                            .pipe(fs.createWriteStream(path, { mode: header.mode || 0o644 })).on('close', () =>
+                                utimes(path, (err) => {
+                                    if (err) return next(err);
+                                    next();
+                                })
+                            );
                     });
                 }
             else (function dirHandler() {
@@ -79,18 +91,24 @@ cpc.onMaster('saveLog', async (req, res) => {
                     streamDropped = true;
                 });
 
-                mkdir(header.name, (err) => {
+                const path = PATH.join(output, header.name);
+
+                mkdir(path, header.name, (err) => {
                     if (err) return next(err);
-                    if (streamDropped) return next()
-                    pending = false
+                    utimes(path, (err) => {
+                        if (err) return next(err);
+                        if (streamDropped) return next()
+                        pending = false
+                    });
                 });
             })();
 
-            function mkdir(dirname: string, cb: (err?: NodeJS.ErrnoException) => void) {
-                if (mkedDir[dirname]) return cb();
-                fs.mkdir(PATH.join(output, dirname), { recursive: true, mode: 0o755 }, (err) => {
+            function mkdir(path: string, dirName: string, cb: (err?: NodeJS.ErrnoException) => void) {
+                if (mkedDir[dirName]) return cb();
+
+                fs.mkdir(path, { recursive: true, mode: header.type === 'directory' ? (header.mode || 0o755) : 0o755 }, (err) => {
                     if (err) return cb(err);
-                    const arr = dirname.split('/');
+                    const arr = dirName.split('/');
                     let p = ''
                     for (let i = 0, l = arr.length; i < l; i++) {
                         p += '/' + arr[i]
@@ -99,10 +117,22 @@ cpc.onMaster('saveLog', async (req, res) => {
                     cb();
                 });
             }
-        })
+
+            function utimes(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
+                fs.utimes(path, new Date(), new Date(header.mtime), (err) => {
+                    if (err) return cb(err);
+                    cb();
+                });
+            }
+        });
 
         fs.createReadStream(req.input, { start: 3867 })
-            .pipe(extract.input).on('finish', res);
+            .pipe(extract.input)
+            .on('finish', res)
+            .on('error', (err) => {
+                log.debug(err);
+                res(err);
+            });
 
     } catch (err) {
         log.debug(err);
@@ -170,7 +200,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 )
             )
         })).then(() => res(null, bytesLength, mods)).catch(res)),
-        pack = new archive.Pack();
+        pack = new bua.Pack();
 
     log.info(`Syncing & encrypting ${isFile ? 'file' : 'folder'}... [${formatPath(req.input)}]`);
 
@@ -188,11 +218,11 @@ cpc.onMaster('saveLog', async (req, res) => {
 
                 log.info(`Previous backup found, comparing modified time... [${formatPath(req.input)}]`);
 
-                const extract = new archive.Extract();
+                const extract = new bua.Extract();
 
                 key = crypto.randomBytes(32);
 
-                extract.onEntry((header, stream, next) => {
+                extract.entry((header, stream, next) => {
 
                     const mtime = Math.floor(inputStats.mtimeMs);
 
@@ -216,6 +246,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                 name: randomName,
                                 size: inputStats.size,
                                 mtime: mtime,
+                                mode: inputStats.mode,
                                 type: 'file'
                             }, () => {
                                 if (streamDropped) return next()
@@ -234,7 +265,8 @@ cpc.onMaster('saveLog', async (req, res) => {
                     pack.output.pipe(writeStream);
 
                     fs.createReadStream(previousBackupPath, { start: 3867 })
-                        .pipe(extract.input).on('finish', () => pack.finalize());
+                        .pipe(extract.input)
+                        .on('finish', () => pack.finalize());
                 });
 
             } else {
@@ -257,6 +289,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                             name: randomName,
                             size: inputStats.size,
                             mtime: Math.floor(inputStats.mtimeMs),
+                            mode: inputStats.mode,
                             type: 'file'
                         }, (err) => {
                             if (err) return res(err);
@@ -297,13 +330,13 @@ cpc.onMaster('saveLog', async (req, res) => {
                         format: 'pem',
                         passphrase: req.passwordHash
                     }),
-                    extract = new archive.Extract();
+                    extract = new bua.Extract();
 
                 key = crypto.privateDecrypt(privateKey, head.encryptedKey);
 
-                let entries: { [name: string]: Header } = {};
+                let entries: { [name: string]: Bua.Header } = {};
 
-                extract.onEntry((header, stream, next) => {
+                extract.entry((header, stream, next) => {
                     let path = PATH.join(req.input, header.name);
 
                     getHeader(path, (err, stats) => {
@@ -436,7 +469,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                     }
                 }
 
-                function getHeader(path: string, cb: (err: NodeJS.ErrnoException, stats?: Header) => void) {
+                function getHeader(path: string, cb: (err: NodeJS.ErrnoException, stats?: Bua.Header) => void) {
 
                     const name = normalizePath(path.slice(prefixLength));
 
@@ -448,6 +481,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                 name: name + '/',
                                 size: 0,
                                 mtime: Math.floor(stats.mtimeMs),
+                                mode: stats.mode,
                                 type: 'directory'
                             })
                         } else if (stats.isFile())
@@ -455,6 +489,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                 name: name,
                                 size: stats.size,
                                 mtime: Math.floor(stats.mtimeMs),
+                                mode: stats.mode,
                                 type: 'file'
                             });
                         else cb(null, null)
@@ -479,7 +514,6 @@ cpc.onMaster('saveLog', async (req, res) => {
                         pack.finalize();
                     });
 
-
                     function getEntry(path: string, cb: (err: NodeJS.ErrnoException) => void) {
 
                         const name = normalizePath(path.slice(prefixLength)),
@@ -496,6 +530,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     name: name + '/',
                                     size: 0,
                                     mtime: Math.floor(stats.mtimeMs),
+                                    mode: stats.mode,
                                     type: 'directory'
                                 });
                                 fs.readdir(path, (err, files) => {
@@ -521,6 +556,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                         name: name,
                                         size: stats.size,
                                         mtime: Math.floor(stats.mtimeMs),
+                                        mode: stats.mode,
                                         type: 'file'
                                     }, cb)), mods.file[0]++;
                             else cb(null)

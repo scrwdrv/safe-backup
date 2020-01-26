@@ -1,12 +1,10 @@
 import * as stream from 'stream';
 
-declare global {
-    interface Header {
-        name: string;
-        size: number;
-        mtime: number;
-        type: 'file' | 'directory'
-    }
+interface Header {
+    name: string;
+    size: number;
+    mtime: number;
+    type: 'file' | 'directory'
 }
 
 interface IndexHeader {

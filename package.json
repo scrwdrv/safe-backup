@@ -47,6 +47,7 @@
   "dependencies": {
     "addcolor": "^1.0.6",
     "appdata-path": "^1.0.0",
+    "bua": "^1.0.1",
     "cli-params": "^1.2.1",
     "colorful-log": "^1.0.3",
     "node-watch": "^0.6.3",
