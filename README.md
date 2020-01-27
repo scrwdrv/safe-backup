@@ -274,7 +274,7 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
-- v1.4
+- v1.4.1
   - Add plain backup (no packing and encryption)
   - [bua](https://github.com/scrwdrv/bua) bug fixed
   - No longer change mtime & atime of directories
