@@ -596,7 +596,7 @@ cpc.onMaster('saveLog', async (req, res) => {
     }
 }).onMaster('plainBackup', async (req: BackupOptions, res) => {
 
-    log.info(`Syncing plain backup... [${formatPath(req.input)}]`);
+
 
     let bytesLength = 0,
         mods = {
@@ -605,11 +605,19 @@ cpc.onMaster('saveLog', async (req, res) => {
         },
         entries = {};
 
-    const fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255),
+    const inputStats = await new Promise<fs.Stats>((resolve) =>
+        fs.stat(req.input, (err, stats) => {
+            if (err) return res(err);
+            resolve(stats);
+        })),
+        isFile = inputStats.isFile(),
+        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255),
         regs = req.ignore.map(str => {
             return regex.from(str);
         }),
         prefixLength = req.input.length;
+
+    log.info(`Syncing ${isFile ? 'file' : 'folder'}... [${formatPath(req.input)}]`);
 
     getEntry(req.input, (err) => {
         if (err) return res(err);
