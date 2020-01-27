@@ -37,6 +37,12 @@ declare global {
         ignore: string[];
     }
 
+    interface PlainBackupOptions {
+        input: string;
+        output: string[];
+        ignore: string[];
+    }
+
     interface DecryptOptions {
         input: string;
         passwordHash: string;
@@ -630,7 +636,7 @@ function backup(options: BackupOptions) {
         const worker = getWokrer(),
             t = Date.now();
         running.push(worker.id);
-        worker.sendJob('backup', options, (err, bytes, mods) => {
+        worker.sendJob('plain-backup', options, (err, bytes, mods) => {
             const tDiff = Date.now() - t;
             if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`), log.warn(`If this happens continuously, try to delete old backup file`);
             else log.info(`Synced [${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(options.input)}]`);

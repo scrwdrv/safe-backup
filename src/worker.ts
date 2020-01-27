@@ -317,7 +317,7 @@ cpc.onMaster('saveLog', async (req, res) => {
             if (head && !req.passwordHash) log.warn(`Previous backup found but save password function is disabled, re-encrypting... [${formatPath(req.input)}]`), head = null;
 
             const regs = req.ignore.map(str => {
-                return regex.from(str)
+                return regex.from(str);
             }), prefixLength = req.input.length;
 
             if (head) {
@@ -427,12 +427,12 @@ cpc.onMaster('saveLog', async (req, res) => {
                         );
                 });
 
-                function updateHeader(path: string, cb: (err: NodeJS.ErrnoException) => void) {
+                function updateHeader(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
 
                     if (entries[path])
                         if (entries[path].type === 'directory')
                             recursiveDir();
-                        else cb(null);
+                        else cb();
                     else getHeader(path, (err, stats) => {
                         if (err) return cb(err);
 
@@ -440,7 +440,7 @@ cpc.onMaster('saveLog', async (req, res) => {
 
                         for (let i = regs.length; i--;)
                             if (regs[i].test(stats.name) || n.indexOfRegex(regs[i]) > -1)
-                                return cb(null);
+                                return cb();
 
                         if (stats.type === 'directory') {
                             pack.writeHeader(stats);
@@ -459,7 +459,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                             const l = files.length;
 
                             (function next(i = 0) {
-                                if (i === l) return cb(null);
+                                if (i === l) return cb();
                                 updateHeader(PATH.join(path, files[i]), (err) => {
                                     if (err) return cb(err);
                                     next(i + 1)
@@ -514,13 +514,13 @@ cpc.onMaster('saveLog', async (req, res) => {
                         pack.finalize();
                     });
 
-                    function getEntry(path: string, cb: (err: NodeJS.ErrnoException) => void) {
+                    function getEntry(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
 
                         const name = normalizePath(path.slice(prefixLength)),
                             n = name.split('/');
 
                         for (let i = regs.length; i--;)
-                            if (regs[i].test(name) || n.indexOfRegex(regs[i]) > -1) return cb(null);
+                            if (regs[i].test(name) || n.indexOfRegex(regs[i]) > -1) return cb();
 
                         fs.stat(path, (err, stats) => {
                             if (err) return cb(err);
@@ -539,7 +539,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     const l = files.length;
 
                                     (function next(i = 0) {
-                                        if (i === l) return cb(null);
+                                        if (i === l) return cb();
                                         getEntry(PATH.join(path, files[i]), (err) => {
                                             if (err) return cb(err);
                                             next(i + 1)
@@ -559,7 +559,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                         mode: stats.mode,
                                         type: 'file'
                                     }, cb)), mods.file[0]++;
-                            else cb(null)
+                            else cb()
                         });
                     }
                 });
@@ -590,6 +590,93 @@ cpc.onMaster('saveLog', async (req, res) => {
                     });
                 });
             });
+        });
+    }
+}).onMaster('plain-backup', async (req: PlainBackupOptions, res) => {
+    let bytesLength = 0,
+        mods = {
+            file: [0, 0],
+            directory: [0, 0]
+        };
+
+    const fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 255),
+        regs = req.ignore.map(str => {
+            return regex.from(str);
+        }),
+        prefixLength = req.input.length;
+
+    getEntry(req.input, (err) => {
+        if (err) return res(err);
+        res(null, bytesLength, mods);
+    });
+
+    function getEntry(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
+
+        const name = normalizePath(path.slice(prefixLength)),
+            n = name.split('/');
+
+        for (let i = regs.length; i--;)
+            if (regs[i].test(name) || n.indexOfRegex(regs[i]) > -1) return cb();
+
+        fs.stat(path, (err, stats) => {
+            if (err) return cb(err);
+
+            if (stats.isDirectory()) mkdirs(path, (err) => {
+                if (err) return cb(err);
+                fs.readdir(path, (err, files) => {
+                    if (err) return cb(err);
+
+                    const l = files.length;
+
+                    (function next(i = 0) {
+                        if (i === l) return cb();
+                        getEntry(PATH.join(path, files[i]), (err) => {
+                            if (err) return cb(err);
+                            next(i + 1)
+                        })
+                    })();
+                });
+            });
+            else if (stats.isFile()) copyFiles(path, (err) => {
+                if (err) return cb(err);
+                cb();
+            })
+            else cb();
+        });
+    }
+
+    function mkdirs(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
+        Promise.all(req.output.map(p => {
+            p = PATH.join(p, fileName, path.slice(prefixLength));
+            return new Promise<void>((resolve, reject) =>
+                fs.access(p, (err) => {
+                    if (err) return fs.mkdir(p, (err) => {
+                        if (err) return reject(err);
+                        resolve();
+                    });
+                    resolve();
+                })
+            );
+        })).then(() => cb()).catch(cb)
+    }
+
+    function copyFiles(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
+        fs.stat(path, (err, inputStats) => {
+            if (err) return cb(err);
+            Promise.all(req.output.map(p => {
+                p = PATH.join(p, fileName, path.slice(prefixLength));
+                return new Promise<void>((resolve, reject) =>
+                    fs.stat(p, (err, stats) => {
+                        if (err && err.code !== 'ENOENT') return reject(err);
+                        else if (err || stats.mtime < inputStats.mtime)
+                            return fs.copyFile(path, p, (err) => {
+                                if (err) return reject(err);
+                                resolve();
+                            });
+                        resolve();
+                    })
+                );
+            })).then(() => cb()).catch(cb)
         });
     }
 });
