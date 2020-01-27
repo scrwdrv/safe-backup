@@ -686,9 +686,8 @@ function watchMod(path: string, isFile: boolean, retry = 0) {
                 const arr = file.split(PATH.sep);
                 for (let i = regs.length; i--;)
                     if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
-
                 modified[path] = true;
-                log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.join(p, file))}]`);
+                log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.resolve(p, file))}]`);
             }).on('error', (err) => {
                 log.debug(err);
                 log.error(`Error occurred while monitoring [${formatPath(p)}], retry in 10 secs...`);
