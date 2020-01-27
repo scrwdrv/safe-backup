@@ -83,7 +83,8 @@ Usage:
 
 Options:
 
-    -i --input          Absolute paths of folders/files to backup, separate by space.
+    -i --input          Absolute paths of folders/files to backup, separate by space. 
+                        Paths start with \`*\` will not be encrypted or packed.
     -o --output         Absolute paths of folders to store encrypted files, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rules with regex, separate by space.  
@@ -635,7 +636,7 @@ function backup(options: BackupOptions) {
 
         let method = 'backup';
 
-        if (/^!/.test(options.input))
+        if (/^\*/.test(options.input))
             options.input = options.input.slice(1), method = 'plainBackup';
 
         worker.sendJob(method, options, (err, bytes, mods) => {

@@ -32,7 +32,7 @@ export default class Prompt {
     public questions = {
         getInput: (inputs = []) => {
             return new Promise<string[]>(resolve =>
-                this.ask(`Enter absolute path of folder/file to backup: `).then(path => {
+                this.ask(`Enter absolute path of folder/file to backup (paths start with \`*\` will not be encrypted or packed): `).then(path => {
                     inputs.push(path);
                     this.questions.getYn(`More file/folder to backup [Y/N]? `).then(boo => {
                         if (boo) this.questions.getInput(inputs).then(resolve);
