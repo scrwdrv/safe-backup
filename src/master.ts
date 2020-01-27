@@ -83,8 +83,9 @@ Usage:
 
 Options:
 
-    -i --input          Absolute paths of folders/files to backup, separate by space.
-    -o --output         Absolute paths of folders to store encrypted files, separate by space.
+    -i --input          Absolute paths of folders/files to backup, separate by space,
+                        paths start with \`*\` will not be encrypted or packed.
+    -o --output         Absolute paths of folders to store backup files, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rules with regex, separate by space.  
     -s --save-password  Save password to the system. When backing up folders, previous password will be reused
@@ -161,12 +162,15 @@ let config: Config = {} as any,
                     encryptedPrivateKey: keys.encryptedPrivate,
                     ignore: config.ignore
                 }).then(() => {
-                    if (config.watch) return fs.stat(config.input[i], (err, stats) => {
-                        if (err) return log.debug(err),
-                            log.error(`Error occurred while accessing [${formatPath(config.input[i])}]`);
-                        backupDaemon(config.input[i]);
-                        watchMod(config.input[i], stats.isFile());
-                    });
+                    if (config.watch)
+                        normalizeInput(config.input[i], (type, p) => {
+                            fs.stat(p, (err, stats) => {
+                                if (err) return log.debug(err),
+                                    log.error(`Error occurred while accessing [${formatPath(p)}]`);
+                                backupDaemon(config.input[i]);
+                                watchMod(config.input[i], stats.isFile());
+                            });
+                        });
                 })
             )
 
@@ -498,10 +502,16 @@ function handleConfig(c?: Config) {
 
         function checkPath() {
             for (let typeOfPath of ['input', 'output'])
-                for (let i = config[typeOfPath].length; i--;)
-                    if (!PATH.isAbsolute(config[typeOfPath][i]))
+                for (let i = config[typeOfPath].length; i--;) {
+                    if (typeOfPath === 'input') normalizeInput(config[typeOfPath][i], (type, p) => {
+                        if (!PATH.isAbsolute(p))
+                            return log.error(`Path must be absolute [${formatPath(p)}]`), reject();
+                        else config[typeOfPath][i] = config[typeOfPath][i].replace(/(?:\\|\/)$/, '')
+                    })
+                    else if (!PATH.isAbsolute(config[typeOfPath][i]))
                         return log.error(`Path must be absolute [${formatPath(config[typeOfPath][i])}]`), reject();
                     else config[typeOfPath][i] = config[typeOfPath][i].replace(/(?:\\|\/)$/, '')
+                }
             resolve();
         }
     });
@@ -611,7 +621,7 @@ function decrypt(options: DecryptOptions) {
         const worker = getWokrer(),
             t = Date.now();
         running.push(worker.id);
-        worker.sendJob('decrypt', options, (err, bytes, mods) => {
+        worker.sendJob('decrypt', options, (err) => {
             if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(options.input)}]`);
             else {
                 const decrypt = PATH.parse(options.input);
@@ -627,17 +637,23 @@ function decrypt(options: DecryptOptions) {
 
 function backup(options: BackupOptions) {
     return new Promise<void>(resolve => {
+
         const worker = getWokrer(),
             t = Date.now();
-        running.push(worker.id);
-        worker.sendJob('backup', options, (err, bytes, mods) => {
-            const tDiff = Date.now() - t;
-            if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`), log.warn(`If this happens continuously, try to delete old backup file`);
-            else log.info(`Synced [${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(options.input)}]`);
 
-            const index = running.indexOf(worker.id);
-            if (index > -1) running.splice(index, 1);
-            resolve();
+        running.push(worker.id);
+
+        normalizeInput(options.input, (type, p) => {
+            options.input = p;
+            worker.sendJob(type === 0 ? 'backup' : 'plainBackup', options, (err, bytes, mods) => {
+                const tDiff = Date.now() - t;
+                if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`), log.warn(`If this happens continuously, try to delete old backup file`);
+                else log.info(`Synced ${type === 0 ? '& encrypted ' : ''}[${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes * options.output.length / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(options.input)}]`);
+
+                const index = running.indexOf(worker.id);
+                if (index > -1) running.splice(index, 1);
+                resolve();
+            });
         });
     });
 }
@@ -659,35 +675,35 @@ function backupDaemon(input: string) {
 }
 
 function watchMod(path: string, isFile: boolean, retry = 0) {
+    normalizeInput(path, (type, p) => {
+        if (retry > 5) {
+            log.warn(`Stopped monitoring [${formatPath(p)}], next check in 10 mins...`);
+            return setTimeout(watchMod, 600000, path, isFile, 0);
+        }
 
-    if (retry > 5) {
-        log.warn(`Stopped monitoring [${formatPath(path)}], next check in 10 mins...`);
-        return setTimeout(watchMod, 600000, path, isFile, 0);
-    }
-
-    const watcher =
-        watch(path, { recursive: !isFile }, (evt, file) => {
-            const arr = file.split(PATH.sep);
-            for (let i = regs.length; i--;)
-                if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
-
-            modified[path] = true;
-            log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.join(path, file))}]`);
-        }).on('error', (err) => {
-            log.debug(err);
-            log.error(`Error occurred while monitoring [${formatPath(path)}], retry in 10 secs...`);
-            watcher.removeAllListeners('close');
-            watcher.close();
-            clearTimeout(timeout);
-            setTimeout(watchMod, 10000, path, isFile, retry + 1);
-        }).on('close', () => {
-            clearTimeout(timeout);
-            setTimeout(watchMod, 10000, path, isFile, retry + 1);
-        }),
-        timeout = setTimeout(() => retry = 0, 60000),
-        regs = config.ignore.map(str => {
-            return regex.from(str)
-        })
+        const watcher =
+            watch(p, { recursive: !isFile }, (evt, file) => {
+                const arr = file.split(PATH.sep);
+                for (let i = regs.length; i--;)
+                    if (regs[i].test(file) || arr.indexOfRegex(regs[i]) > -1) return;
+                modified[path] = true;
+                log.info(`Modification detected [${evt.toUpperCase()}][${formatPath(PATH.resolve(p, file))}]`);
+            }).on('error', (err) => {
+                log.debug(err);
+                log.error(`Error occurred while monitoring [${formatPath(p)}], retry in 10 secs...`);
+                watcher.removeAllListeners('close');
+                watcher.close();
+                clearTimeout(timeout);
+                setTimeout(watchMod, 10000, path, isFile, retry + 1);
+            }).on('close', () => {
+                clearTimeout(timeout);
+                setTimeout(watchMod, 10000, path, isFile, retry + 1);
+            }),
+            timeout = setTimeout(() => retry = 0, 60000),
+            regs = config.ignore.map(str => {
+                return regex.from(str)
+            });
+    })
 }
 
 async function exit(retry: number = 0) {
@@ -773,4 +789,9 @@ function formatBytes(bytes: number) {
     const chars = 'KMGTP',
         e = Math.floor(Math.log(bytes) / Math.log(1024));
     return (bytes / Math.pow(1024, e)).toFixed(2) + ' ' + chars.charAt(e - 1) + 'B';
+}
+
+function normalizeInput(path: string, cb: (type: 0 | 1, path: string) => void) {
+    if (/^\*/.test(path)) return cb(1, path.slice(1))
+    cb(0, path)
 }
