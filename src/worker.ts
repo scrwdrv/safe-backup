@@ -58,7 +58,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 if (head.isFile)
                     stream
                         .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
-                        .pipe(fs.createWriteStream(output, { mode: header.mode || 0o644 })).on('finish', () =>
+                        .pipe(fs.createWriteStream(output, { mode: header.mode || 0o666 })).on('finish', () =>
                             utimes(output, (err) => {
                                 if (err) return next(err);
                                 next();
@@ -74,7 +74,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                         if (err) return next(err);
                         stream
                             .pipe(crypto.createDecipheriv('aes-256-ctr', key, hashMD5(header.name)))
-                            .pipe(fs.createWriteStream(path, { mode: header.mode || 0o644 })).on('finish', () =>
+                            .pipe(fs.createWriteStream(path, { mode: header.mode || 0o666 })).on('finish', () =>
                                 utimes(path, (err) => {
                                     if (err) return next(err);
                                     next();
@@ -103,7 +103,7 @@ cpc.onMaster('saveLog', async (req, res) => {
             function mkdir(path: string, dirName: string, cb: (err?: NodeJS.ErrnoException) => void) {
                 if (mkedDir[dirName]) return cb();
 
-                fs.mkdir(path, { recursive: true, mode: header.type === 'directory' ? (header.mode || 0o755) : 0o755 }, (err) => {
+                fs.mkdir(path, { recursive: true, mode: header.type === 'directory' ? (header.mode || 0o777) : 0o777 }, (err) => {
                     if (err) return cb(err);
                     const arr = dirName.split('/');
                     let p = ''
