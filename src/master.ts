@@ -621,7 +621,7 @@ function decrypt(options: DecryptOptions) {
         const worker = getWokrer(),
             t = Date.now();
         running.push(worker.id);
-        worker.sendJob('decrypt', options, (err, bytes, mods) => {
+        worker.sendJob('decrypt', options, (err) => {
             if (err) log.debug(err), log.error(`Error occurred while decrypting, password may be incorrect [${formatPath(options.input)}]`);
             else {
                 const decrypt = PATH.parse(options.input);
