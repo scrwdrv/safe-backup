@@ -4,7 +4,6 @@ import CPC from 'worker-communication';
 import Logger from 'colorful-log';
 import { Writable } from 'stream';
 import * as crypto from 'crypto';
-import * as dir from 'recurdir';
 import { platform } from 'os';
 import * as PATH from 'path';
 import * as bua from 'bua';
@@ -360,7 +359,6 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     mtime: null
                                 }, stream.skip(next);
 
-
                         if (header.type !== stats.type) {
                             switch (stats.type) {
                                 case 'file':
@@ -387,7 +385,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     mods.directory[0]++;
                                     break;
                             }
-                        } else stream.pipe(pack.entry(header, next));
+                        } else stream.pipe(pack.entry(stats, next));
 
                         entries[header.type === 'directory' ? path.slice(0, -1) : path] = stats;
 
@@ -407,7 +405,6 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     pending = false;
                                 }));
                         }
-
                     });
                 });
 
@@ -430,10 +427,8 @@ cpc.onMaster('saveLog', async (req, res) => {
                 });
 
                 function updateHeader(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
-
                     if (entries[path])
-                        if (entries[path].type === 'directory')
-                            recursiveDir();
+                        if (entries[path].type === 'directory') recursiveDir();
                         else cb();
                     else getHeader(path, (err, stats) => {
                         if (err) return cb(err);
@@ -450,8 +445,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                             mods.directory[0]++;
                         } else fs.createReadStream(path)
                             .pipe(crypto.createCipheriv('aes-256-ctr', key, hashMD5(stats.name)))
-                            .pipe(pack.entry(stats, cb)), mods.file[0]++;;
-
+                            .pipe(pack.entry(stats, cb)), mods.file[0]++;
                     });
 
                     function recursiveDir() {
@@ -595,8 +589,6 @@ cpc.onMaster('saveLog', async (req, res) => {
         });
     }
 }).onMaster('plainBackup', async (req: BackupOptions, res) => {
-
-
 
     let bytesLength = 0,
         mods = {

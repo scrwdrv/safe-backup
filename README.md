@@ -276,6 +276,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 ## Changelog
 - v1.3.19
   - Add plain backup (no packing and encryption)
+  - [bua](https://github.com/scrwdrv/bua) bug fixed
 - v1.3.18
   - `archive` is now a new module named [bua](https://github.com/scrwdrv/bua)
   - Restore original stats (mtime, permission, etc.) when unpacking
