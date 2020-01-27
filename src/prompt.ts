@@ -43,7 +43,7 @@ export default class Prompt {
         },
         getOutput: (outputs = []) => {
             return new Promise<string[]>(resolve =>
-                this.ask(`Enter absolute path of folder to store encrypted file: `).then(path => {
+                this.ask(`Enter absolute path of folder to store backup file: `).then(path => {
                     outputs.push(path);
                     this.questions.getYn(`More output destination [Y/N]? `).then(boo => {
                         if (boo) this.questions.getOutput(outputs).then(resolve);

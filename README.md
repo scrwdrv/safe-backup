@@ -189,8 +189,8 @@ Update safe-backup by `npm update` is only available for those who install with 
  
     | Parameter     |Alias|Optional | Value                | Description                                        |
     |:--------------|:---:|:-------:|:--------------------:|:--------------------------------------------------:|
-    |--input        | -i  | `false` |`string` \| `strings` | Absolute paths of folders/files to backup          |
-    |--output       | -o  | `false` |`string` \| `strings` | Absolute paths of folders to store encrypted files |
+    |--input        | -i  | `false` |`string` \| `strings` | Absolute paths of folders/files to backup,<br/> paths start with `*` will not be encrypted or packed|
+    |--output       | -o  | `false` |`string` \| `strings` | Absolute paths of folders to store backup files    |
     |--watch        | -w  | `true`  |`number` \| `null`    | Enable watch mode. Default check interval is `60`  |
     |--ignore       | -I  | `true`  |`string` \| `strings` | Add ignore rules with regex                        |
     |--save-password| -s  | `true`  |`boolean`             | Save password to the system. Default is `true`     |
@@ -205,6 +205,10 @@ Update safe-backup by `npm update` is only available for those who install with 
     Mutiple input & output:
     ```sh
     safe-backup -i "C:\Users\Bob\Pictures" "C:\Users\Bob\Videos" -o "D:\Backup" "F:\Backup" 
+    ```
+    Backup without encryption or pack:
+    ```sh
+    safe-backup -i "*C:\Users\Bob\Pictures" -o "D:\Backup"
     ```
     Path contains spaces:
     ```sh
