@@ -206,7 +206,7 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```sh
     safe-backup -i "C:\Users\Bob\Pictures" "C:\Users\Bob\Videos" -o "D:\Backup" "F:\Backup" 
     ```
-    Backup without encryption or pack:
+    Backup without encryption or packing:
     ```sh
     safe-backup -i "*C:\Users\Bob\Pictures" -o "D:\Backup"
     ```
@@ -274,6 +274,8 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.3.19
+  - Add plain backup (no packing and encryption)
 - v1.3.18
   - `archive` is now a new module named [bua](https://github.com/scrwdrv/bua)
   - Restore original stats (mtime, permission, etc.) when unpacking
@@ -320,7 +322,7 @@ Update safe-backup by `npm update` is only available for those who install with 
 
 
 ## Todo
-- [ ] Plain backup (no packing and encryption)
+- [x] Plain backup (no packing and encryption)
 - [ ] Benchmark
 - [x] Allow multiple files to decrypt at once
 - [x] Unpacked files to have original stats (mtime, permission, etc.)
