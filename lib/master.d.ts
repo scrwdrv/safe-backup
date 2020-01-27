@@ -15,11 +15,6 @@ declare global {
         encryptedPrivateKey: string;
         ignore: string[];
     }
-    interface PlainBackupOptions {
-        input: string;
-        output: string[];
-        ignore: string[];
-    }
     interface DecryptOptions {
         input: string;
         passwordHash: string;
