@@ -594,7 +594,10 @@ cpc.onMaster('saveLog', async (req, res) => {
             });
         });
     }
-}).onMaster('plain-backup', async (req: BackupOptions, res) => {
+}).onMaster('plainBackup', async (req: BackupOptions, res) => {
+
+    log.info(`Syncing plain backup... [${formatPath(req.input)}]`);
+
     let bytesLength = 0,
         mods = {
             file: [0, 0],
