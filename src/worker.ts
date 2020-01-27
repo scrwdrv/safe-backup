@@ -595,7 +595,7 @@ cpc.onMaster('saveLog', async (req, res) => {
             file: [0, 0],
             directory: [0, 0]
         },
-        entries = {};
+        entries: { [name: string]: number } = {};
 
     const inputStats = await new Promise<fs.Stats>((resolve) =>
         fs.stat(req.input, (err, stats) => {
@@ -620,7 +620,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                     resolve();
                 })
             )
-        })).then(() => res(null, bytesLength, mods)).catch(res)
+        })).then(() => res(null, bytesLength, mods)).catch(res);
     });
 
     function recursiveCheck(path: string, cb: (err?: NodeJS.ErrnoException) => void, prefixLength = path.length) {
@@ -639,7 +639,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 if (i === l) return cb();
                 recursiveCheck(PATH.join(path, files[i]), (err) => {
                     if (err) return cb(err);
-                    next(i + 1)
+                    next(i + 1);
                 }, prefixLength);
             })();
         })
@@ -648,7 +648,7 @@ cpc.onMaster('saveLog', async (req, res) => {
             if (err) return cb(err);
             if (stats.isDirectory()) recursiveRmdir(path).then(cb).catch(cb);
             else fs.unlink(path, cb), mods.file[1]++;
-        })
+        });
     }
 
     function getEntry(path: string, cb: (err?: NodeJS.ErrnoException) => void) {
@@ -673,7 +673,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                         if (i === l) return cb();
                         getEntry(PATH.join(path, files[i]), (err) => {
                             if (err) return cb(err);
-                            next(i + 1)
+                            next(i + 1);
                         })
                     })();
                 });
