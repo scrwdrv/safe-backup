@@ -137,13 +137,15 @@ let config: Config = {} as any,
         await dir.mk(config.output);
         await getPassword();
 
-        const newerVersion = await updateCheck({ name: pkg.name, version: pkg.version }).catch((err) => {
+        const newerVersion = await updateCheck({ name: pkg.name, version: pkg.version }).catch(err => {
+            log.debug(err);
             log.warn(`Failed to check for updates with npm`);
         });
 
         if (newerVersion)
             log.warn(`safe-backup v${newerVersion} released, ${color.yellowBright('`npm update -g safe-backup`')} to update`);
-        else if (newerVersion === null) log.info(`safe-backup is up to date, good for you!`);
+        else if (newerVersion === null)
+            log.info(`safe-backup is up to date, good for you!`);
 
         if (semver.gt('11.6.0', process.version))
             return log.warn(`Node.js v11.6.0 or greater is required for safe-backup, please update your Node.js`), exit();

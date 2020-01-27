@@ -746,7 +746,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 return new Promise<void>((resolve, reject) =>
                     fs.stat(p, (err, stats) => {
                         if (err && err.code !== 'ENOENT') return reject(err);
-                        else if (err || stats.mtimeMs < inputStats.mtimeMs)
+                        else if (err || stats.mtime < inputStats.mtime)
                             return fs.copyFile(path, p, (err) => {
                                 if (err) return reject(err);
                                 resolve();
