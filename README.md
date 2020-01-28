@@ -275,6 +275,9 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.4.2
+  - Add `test` mode to run `n` times of backup in a row
+  - Warm up each worker when they were forked, improve first time performance
 - v1.4.1
   - Add plain backup (no packing and encryption)
   - [bua](https://github.com/scrwdrv/bua) bug fixed
