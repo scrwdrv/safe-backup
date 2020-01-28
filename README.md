@@ -262,6 +262,7 @@ Update safe-backup by `npm update` is only available for those who install with 
     |--import-config|`n/a`|`string`           | Import previously generated configuration          |
     |--export-key   |`n/a`|`null` \| `string` | Export current key                                 |
     |--import-key   |`n/a`|`string`           | Import previously generated key                    |
+    |--test         |`n/a`|`null` \| `number` | Run `n` times of backup in a row, default is `10`  |
 
   - #### Misc examples
 
@@ -272,6 +273,10 @@ Update safe-backup by `npm update` is only available for those who install with 
     Import key from previously generated `key.safe` file:
     ```sh
     safe-backup --import-key "./keys/key.safe"
+    ```
+    Run 10 times of backup for performance testing:
+    ```sh
+    safe-backup --test 10
     ```
 
 ## Changelog
