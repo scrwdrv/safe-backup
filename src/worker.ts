@@ -181,7 +181,7 @@ cpc.onMaster('saveLog', async (req, res) => {
         })),
         isFile = inputStats.isFile(),
         l = req.output.length,
-        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 240) + '.backup',
+        fileName = formatPath(req.input.replace(/[\\*/!|:?<>]+/g, '-'), 240) + '.bua',
         outputs = req.output.map(p => { return fs.createWriteStream(PATH.join(p, fileName + '.temp')); }),
         writeStream = new Writable({
             write(chunk, encoding, next) {
