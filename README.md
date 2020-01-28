@@ -29,6 +29,7 @@
   - Created a whole new archive format just for performance
   - Pipe unchanged files directly without re-encrypting when `savePassword` is set to `true`
   - Runs in [cluster](https://nodejs.org/api/cluster.html), unleash the full power of multi-core processor
+    - 20% ~ 45% faster when dealing with multiple inputs
 
 ## Table of Contents
 
