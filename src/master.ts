@@ -57,7 +57,7 @@ const appDataPath = getAppDataPath('safe-backup'),
         system: 'master',
         cluster: 0,
         path: PATH.join(appDataPath, 'logs'),
-        debug: false
+        debug: true
     }),
     helpText = `
 Usage:
@@ -88,7 +88,7 @@ Options:
     -o --output         Absolute paths of folders to store backup files, separate by space.
     -w --watch          Enable watch mode.
     -I --ignore         Add ignore rules with regex, separate by space.  
-    -s --save-password  Save password to the system. When backing up folders, previous password will be reused
+    -s --save-password  Save password to the system. When backing up folders, previous password will be reused,
                         so unchanged files don't need to be re-encrypt (a lot more faster).
                         This parameter set to true by default.
 
@@ -114,7 +114,8 @@ let config: Config = {} as any,
     running: number[] = [],
     modified: { [input: string]: boolean } = {},
     keys: Keys = {} as any,
-    exitState = 0;
+    exitState = 0,
+    test: number;
 
 (async function init() {
 
@@ -150,34 +151,11 @@ let config: Config = {} as any,
         if (semver.gt('11.6.0', process.version))
             return log.warn(`Node.js v11.6.0 or greater is required for safe-backup, please update your Node.js`), exit();
 
-        forkWorkers();
+        await forkWorkers();
 
-        let promises: Promise<void>[] = [];
+        if (test) return runTest()
 
-        for (let i = config.input.length; i--;)
-            promises.push(
-                backup({
-                    input: config.input[i],
-                    output: config.output,
-                    passwordHash: keys.passwordHash,
-                    publicKey: keys.public,
-                    encryptedPrivateKey: keys.encryptedPrivate,
-                    ignore: config.ignore
-                }).then(() => {
-                    if (config.watch)
-                        normalizeInput(config.input[i], (type, p) => {
-                            fs.stat(p, (err, stats) => {
-                                if (err) return log.debug(err),
-                                    log.error(`Error occurred while accessing [${formatPath(p)}]`);
-                                backupDaemon(config.input[i]);
-                                watchMod(config.input[i], stats.isFile());
-                            });
-                        });
-                })
-            )
-
-        await Promise.all(promises);
-
+        await backupInputs();
         if (!config.watch) exit();
 
     } catch (err) {
@@ -321,6 +299,16 @@ function parseParams() {
                 },
                 id: 'import-key'
             })
+            .add({
+                params: {
+                    param: 'test',
+                    type: 'int',
+                    optional: true,
+                    default: 10,
+                    alias: 't'
+                },
+                id: 'test'
+            })
             .exec(async (err, args, id) => {
                 if (err)
                     if (process.argv.length === 2) log.info('No parameters were found, restoring configuration...'), resolve();
@@ -451,6 +439,11 @@ function parseParams() {
                                 quit();
                             }
                         })
+                        break;
+                    case 'test':
+                        test = args.test;
+                        log.warn(`safe-backup is now running in test mode`);
+                        resolve();
                         break;
                 }
             })
@@ -593,9 +586,17 @@ function getPassword() {
     });
 }
 
-function forkWorkers() {
-    for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
-        forkWorker((i + 1).toString());
+function forkWorkers(count = 0) {
+    return new Promise((resolve) => {
+
+        cpc.onWorker('ready', () => {
+            count++;
+            if (count === physicalCores) resolve();
+        });
+
+        for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
+            forkWorker((i + 1).toString());
+    })
 }
 
 function forkWorker(id: string) {
@@ -606,7 +607,7 @@ function forkWorker(id: string) {
         const index = workers.indexOf(worker);
         if (index > -1) workers.splice(index, 1);
         forkWorker(id);
-    });
+    })
 
     workers.push(worker);
     return worker;
@@ -616,6 +617,44 @@ function getWokrer() {
     const worker = workers.shift();
     workers.push(worker);
     return worker;
+}
+
+async function runTest(n = 0, d = 0) {
+    if (n % 2 === 0 || n === test) {
+        log.warn(`Reset previous backup`);
+        await dir.rm(config.output);
+        await dir.mk(config.output);
+        if (n !== test) await halt(1000);
+    }
+
+    if (n === test) return log.warn(`Test finished, avg time: ${Math.round(d / test)}ms`), exit();
+
+    const t = Date.now();
+
+    await backupInputs(false);
+
+    const diff = Date.now() - t;
+
+    log.warn(`Test no.${n + 1}, time: ${diff}ms`);
+    await halt(1000);
+    runTest(n + 1, d + diff);
+}
+
+function halt(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function backupInputs(watch = config.watch ? true : false) {
+    return Promise.all(config.input.map(p => {
+        return backup({
+            input: p,
+            output: config.output,
+            passwordHash: keys.passwordHash,
+            publicKey: keys.public,
+            encryptedPrivateKey: keys.encryptedPrivate,
+            ignore: config.ignore
+        }, watch);
+    }));
 }
 
 function decrypt(options: DecryptOptions) {
@@ -637,7 +676,7 @@ function decrypt(options: DecryptOptions) {
     });
 }
 
-function backup(options: BackupOptions) {
+function backup(options: BackupOptions, watch: boolean = false) {
     return new Promise<void>(resolve => {
 
         const worker = getWokrer(),
@@ -646,14 +685,24 @@ function backup(options: BackupOptions) {
         running.push(worker.id);
 
         normalizeInput(options.input, (type, p) => {
-            options.input = p;
-            worker.sendJob(type === 0 ? 'backup' : 'plainBackup', options, (err, bytes, mods) => {
-                const tDiff = Date.now() - t;
-                if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(options.input)}]`), log.warn(`If this happens continuously, try to delete old backup file`);
-                else log.info(`Synced ${type === 0 ? '& encrypted ' : ''}[${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes * options.output.length / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(options.input)}]`);
+            worker.sendJob(type === 0 ? 'backup' : 'plainBackup', { ...options, input: p }, (err, bytes, mods) => {
 
-                const index = running.indexOf(worker.id);
+                const tDiff = Date.now() - t,
+                    index = running.indexOf(worker.id);
+
+                if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(p)}]`),
+                    log.warn(`If this happens continuously, try to delete old backup file`);
+                else log.info(`Synced ${type === 0 ? '& encrypted ' : ''}[${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes * options.output.length / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(p)}]`);
+
                 if (index > -1) running.splice(index, 1);
+
+                if (watch) fs.stat(p, (err, stats) => {
+                    if (err) return log.debug(err),
+                        log.error(`Error occurred while accessing [${formatPath(p)}]`);
+                    backupDaemon(options.input);
+                    watchMod(options.input, stats.isFile());
+                });
+
                 resolve();
             });
         });

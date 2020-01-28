@@ -27,6 +27,8 @@ const appDataPath = getAppDataPath('safe-backup'),
     }),
     isWin = platform() === 'win32';
 
+warmUp();
+
 cpc.onMaster('saveLog', async (req, res) => {
 
     log.save().then(res).catch(res);
@@ -759,6 +761,28 @@ cpc.onMaster('saveLog', async (req, res) => {
         });
     }
 });
+
+function warmUp() {
+    const cb = (err?: any) => {
+        if (err) log.debug(err), log.error('Something went wrong while warming up')
+        cpc.sendJob('ready', null)
+    }, path = PATH.join(appDataPath, 'temp_' + process.env.workerId);
+
+    try {
+        fs.writeFile(path, crypto.randomBytes(10485760), (err) => {
+            if (err) return cb(err);
+            fs.createReadStream(path)
+                .pipe(crypto.createCipheriv('aes-256-ctr', crypto.randomBytes(32), crypto.randomBytes(16)))
+                .pipe(fs.createWriteStream(path + '.warmup'))
+                .on('finish', () => fs.unlink(path, (err) => {
+                    if (err) log.debug(err), log.error('Something went wrong while warming up')
+                    fs.unlink(path + '.warmup', cb)
+                }))
+        });
+    } catch (err) {
+        cb(err);
+    }
+}
 
 function hashPassword(p: string, salt = '1f3c11d0324d12d5b9cb792d887843d11d74e37e6f7c4431674ebf7c5829b3b8') {
     return crypto.createHash('sha256').update(p + salt).digest();
