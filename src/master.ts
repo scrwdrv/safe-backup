@@ -155,6 +155,8 @@ let config: Config = {} as any,
 
         await forkWorkers();
 
+        await halt(500);
+
         if (test) return runTest()
 
         await backupInputs();
@@ -305,7 +307,6 @@ function parseParams() {
                 params: {
                     param: 'test',
                     type: 'int',
-                    optional: true,
                     default: 10,
                     alias: 't'
                 },
@@ -589,7 +590,7 @@ function getPassword() {
 }
 
 function forkWorkers(count = 0) {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
 
         cpc.onWorker('ready', () => {
             count++;
@@ -598,18 +599,18 @@ function forkWorkers(count = 0) {
 
         for (let i = physicalCores < 1 ? 1 : physicalCores; i--;)
             forkWorker((i + 1).toString());
-    })
+    });
 }
 
-function forkWorker(id: string) {
-    const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true }));
+function forkWorker(id: string, init = true) {
+    const worker = cpc.tunnel(cluster.fork({ workerId: id, isWorker: true, init: init }));
 
     worker.on('exit', () => {
         worker.removeAllListeners('message');
         const index = workers.indexOf(worker);
         if (index > -1) workers.splice(index, 1);
-        forkWorker(id);
-    })
+        forkWorker(id, false);
+    });
 
     workers.push(worker);
     return worker;
@@ -772,7 +773,7 @@ async function exit(retry: number = 0) {
         await new Promise<void>(resolve => {
             const interval = setInterval(() => {
                 if (!running.length) clearInterval(interval), resolve();
-            }, 250)
+            }, 250);
         });
     }
 
@@ -784,7 +785,7 @@ async function exit(retry: number = 0) {
                 worker.removeAllListeners('exit').kill();
                 resolve();
             })
-        )
+        );
     })).then(() => {
         workers = [];
         exitState = 2;
@@ -845,6 +846,6 @@ function formatBytes(bytes: number) {
 }
 
 function normalizeInput(path: string, cb: (type: 0 | 1, path: string) => void) {
-    if (/^\*/.test(path)) return cb(1, path.slice(1))
-    cb(0, path)
+    if (/^\*/.test(path)) return cb(1, path.slice(1));
+    cb(0, path);
 }
