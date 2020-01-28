@@ -80,6 +80,7 @@ Usage:
     safe-backup --import-config <path>
     safe-backup --export-key [path]
     safe-backup --import-key <path>
+    safe-backup --test [n]
 
 Options:
 
@@ -107,6 +108,7 @@ Options:
     --import-config     Import previously generated configuration.
     --export-key        Export current key.
     --import-key        Import previously generated key.
+    -t --test           Run n times of backup in a row for performance testing.
     `;
 
 let config: Config = {} as any,
