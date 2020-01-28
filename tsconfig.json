@@ -5,6 +5,7 @@
         "moduleResolution": "node",
         "alwaysStrict": true,
         "declaration": true,
+        "sourceMap": true,
         "lib": [
             "esnext"
         ],
