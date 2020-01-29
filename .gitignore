@@ -106,3 +106,4 @@ dist
 config.json
 key.safe
 test.*
+lib
