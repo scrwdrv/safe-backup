@@ -10,6 +10,9 @@
   "bin": {
     "safe-backup": "./index.js"
   },
+  "files": [
+    "./lib"
+  ],
   "pkg": {
     "scripts": [
       "./lib/*.js",
