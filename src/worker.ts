@@ -369,7 +369,8 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     mods.file[0]++;
                                     break;
                                 case 'directory':
-                                    stream.pipe(pack.entry(stats, next));
+                                    pack.writeHeader(stats);
+                                    stream.skip(next);
                                     mods.directory[0]++;
                                     mods.file[1]++;
                                     break;
@@ -381,7 +382,8 @@ cpc.onMaster('saveLog', async (req, res) => {
                                     mods.file[0]++;
                                     break;
                                 case 'directory':
-                                    stream.pipe(pack.entry(stats, next));
+                                    pack.writeHeader(stats);
+                                    stream.skip(next);
                                     mods.directory[0]++;
                                     break;
                             }
