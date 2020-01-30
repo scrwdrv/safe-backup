@@ -280,6 +280,8 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.4.3
+  - v1.1.1 release
 - v1.4.2
   - Add `test` mode to run `n` times of backup in a row
   - Warm up each worker when they were forked, improve first time performance
