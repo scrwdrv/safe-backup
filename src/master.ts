@@ -57,7 +57,7 @@ const appDataPath = getAppDataPath('safe-backup'),
         system: 'master',
         cluster: 0,
         path: PATH.join(appDataPath, 'logs'),
-        debug: true
+        debug: false
     }),
     helpText = `
 Usage:
@@ -693,7 +693,7 @@ function backup(options: BackupOptions, watch: boolean = false) {
                 const tDiff = Date.now() - t,
                     index = running.indexOf(worker.id);
 
-                if (err) log.debug(err), log.error(`Error occurred while syncing [${formatPath(p)}]`),
+                if (err) log.debug(err), log.error(`Error occurred while syncing, perhaps input file is being edited? [${formatPath(p)}]`),
                     log.warn(`If this happens continuously, try to delete old backup file`);
                 else log.info(`Synced ${type === 0 ? '& encrypted ' : ''}[${formatSec(tDiff)}s][${formatBytes(bytes)}][${(bytes * options.output.length / 1048576 / (tDiff / 1000)).toFixed(2)} MBps][F:(+${mods.file[0]})(-${mods.file[1]})][D:(+${mods.directory[0]})(-${mods.directory[1]})][${formatPath(p)}]`);
 

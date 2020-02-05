@@ -280,6 +280,8 @@ Update safe-backup by `npm update` is only available for those who install with 
     ```
 
 ## Changelog
+- v1.4.8
+  - Return error while file is currently being edited
 - v1.4.3
   - v1.1.1 release
 - v1.4.2

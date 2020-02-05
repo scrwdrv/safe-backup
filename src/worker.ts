@@ -265,7 +265,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 ]), (err) => {
                     if (err) return res(err);
 
-                    pack.output.pipe(writeStream);
+                    pack.output.pipe(writeStream)
 
                     fs.createReadStream(previousBackupPath, { start: 3867 })
                         .pipe(extract.input)
@@ -505,7 +505,7 @@ cpc.onMaster('saveLog', async (req, res) => {
                 ]), (err) => {
                     if (err) return res(err);
 
-                    pack.output.pipe(writeStream);
+                    pack.output.pipe(writeStream)
 
                     getEntry(req.input, (err) => {
                         if (err) return res(err);
